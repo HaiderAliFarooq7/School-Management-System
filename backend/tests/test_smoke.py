@@ -1,0 +1,222 @@
+"""End-to-end smoke tests across the core modules: auth, students, search,
+fees, attendance, communication, reports, and role-based permissions. They
+assert the happy path works and that role restrictions are actually enforced
+by the backend (not just hidden in the UI)."""
+from datetime import date
+
+from conftest import TEST_CLASS, TEST_PASSWORD
+
+
+# ---------------------------------------------------------------- health/auth
+def test_ping(client):
+    assert client.get("/api/ping").json() == {"status": "ok"}
+
+
+def test_login_and_me(client, admin_headers):
+    me = client.get("/api/auth/me", headers=admin_headers)
+    assert me.status_code == 200
+    assert me.json()["role"] == "Admin"
+
+
+def test_bad_login_rejected(client):
+    resp = client.post("/api/auth/login", json={"username": "smoke_admin", "password": "wrong"})
+    assert resp.status_code == 401
+
+
+def test_change_password_flow(client, admin_headers):
+    # Wrong current password is rejected.
+    bad = client.post(
+        "/api/auth/change-password", headers=admin_headers,
+        json={"current_password": "wrong", "new_password": "newpass123"},
+    )
+    assert bad.status_code == 400
+    # Valid change succeeds, then restore so session login fixtures stay valid.
+    ok = client.post(
+        "/api/auth/change-password", headers=admin_headers,
+        json={"current_password": TEST_PASSWORD, "new_password": "newpass123"},
+    )
+    assert ok.status_code == 200
+    back = client.post(
+        "/api/auth/change-password", headers=admin_headers,
+        json={"current_password": "newpass123", "new_password": TEST_PASSWORD},
+    )
+    assert back.status_code == 200
+
+
+def test_unauthenticated_request_rejected(client):
+    assert client.get("/api/students").status_code == 401
+
+
+# ----------------------------------------------------------------- students
+def test_student_create_get_delete(client, admin_headers, temp_student):
+    got = client.get(f"/api/students/{temp_student['student_id']}", headers=admin_headers)
+    assert got.status_code == 200
+    assert got.json()["name"] == "Smoke Student"
+    assert got.json()["registration_no"].startswith("REG-")
+
+
+def test_student_search_case_insensitive_partial(client, admin_headers, temp_student):
+    resp = client.get("/api/students", headers=admin_headers, params={"search": "smoke stud"})
+    assert resp.status_code == 200
+    assert any(s["student_id"] == temp_student["student_id"] for s in resp.json())
+
+
+# --------------------------------------------------------------------- fees
+def test_fee_voucher_generate_pay_and_status(client, admin_headers, temp_student):
+    sid = temp_student["student_id"]
+    gen = client.post(
+        "/api/fee-vouchers/generate", headers=admin_headers,
+        json={"student_id": sid, "year": 2026, "month": 1, "total_amount": 1000},
+    )
+    assert gen.status_code == 200, gen.text
+    voucher = gen.json()
+    assert voucher["status"] == "Unpaid"
+
+    pay = client.post(
+        f"/api/fee-vouchers/{voucher['voucher_id']}/pay", headers=admin_headers, json={"amount": 400},
+    )
+    assert pay.status_code == 200
+    assert pay.json()["status"] == "Partial"
+
+    overpay = client.post(
+        f"/api/fee-vouchers/{voucher['voucher_id']}/pay", headers=admin_headers, json={"amount": 99999},
+    )
+    assert overpay.status_code == 400  # cannot exceed remaining balance
+
+
+def test_voucher_pdf_streams(client, admin_headers, temp_student):
+    sid = temp_student["student_id"]
+    gen = client.post(
+        "/api/fee-vouchers/generate", headers=admin_headers,
+        json={"student_id": sid, "year": 2026, "month": 2, "total_amount": 1000},
+    )
+    voucher_id = gen.json()["voucher_id"]
+    pdf = client.get(f"/api/fee-vouchers/{voucher_id}/pdf", headers=admin_headers)
+    assert pdf.status_code == 200
+    assert pdf.headers["content-type"] == "application/pdf"
+    assert pdf.content[:4] == b"%PDF"
+
+
+# --------------------------------------------------------------- attendance
+def test_attendance_mark_and_absent_today(client, admin_headers, temp_student):
+    sid = temp_student["student_id"]
+    today = date.today().isoformat()
+    mark = client.post(
+        "/api/attendance/mark", headers=admin_headers,
+        json={"class_name": TEST_CLASS, "attendance_date": today,
+              "entries": [{"student_id": sid, "status": "Absent"}]},
+    )
+    assert mark.status_code == 200
+    absent = client.get("/api/attendance/absent-today", headers=admin_headers, params={"class_name": TEST_CLASS})
+    assert absent.status_code == 200
+    assert any(r["student_id"] == sid for r in absent.json())
+
+
+# ------------------------------------------------------------ communication
+def test_communication_templates_and_providers(client, admin_headers):
+    assert client.get("/api/communication/templates", headers=admin_headers).status_code == 200
+    providers = client.get("/api/communication/providers", headers=admin_headers)
+    assert providers.status_code == 200
+    assert len(providers.json()) >= 1
+
+
+def test_communication_queue_custom_message(client, admin_headers, temp_student):
+    resp = client.post(
+        "/api/communication/queue", headers=admin_headers,
+        json={"student_id": temp_student["student_id"], "recipient_name": "Smoke Student",
+              "provider_type": "sms", "notification_type": "custom",
+              "recipient": "03001112222", "message": "Smoke test message"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "pending"
+
+
+def test_analytics_admin_only(client, admin_headers, accountant_headers):
+    assert client.get("/api/communication/analytics", headers=admin_headers).status_code == 200
+    assert client.get("/api/communication/analytics", headers=accountant_headers).status_code == 403
+
+
+def test_whatsapp_account_create_never_exposes_token(client, admin_headers):
+    resp = client.post(
+        "/api/communication/whatsapp-accounts", headers=admin_headers,
+        json={"name": "Smoke WA Account", "phone_number_id": "000", "access_token": "fake-token-xyz"},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert "access_token" not in body and "access_token_encrypted" not in body
+    assert body["has_access_token"] is True
+    assert "fake-token-xyz" not in resp.text
+
+
+def test_whatsapp_account_test_draft_never_exposes_token(client, admin_headers):
+    # No real Meta credentials in this test environment — must fail cleanly
+    # (not crash) and never include the access token in the response.
+    resp = client.post(
+        "/api/communication/whatsapp-accounts/test-draft", headers=admin_headers,
+        json={"access_token": "fake-token-xyz", "phone_number_id": "000"},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] == "disconnected"
+    assert "fake-token-xyz" not in resp.text and '"access_token"' not in resp.text.lower()
+
+
+def test_whatsapp_accounts_admin_only(client, accountant_headers):
+    assert client.get("/api/communication/whatsapp-accounts", headers=accountant_headers).status_code == 403
+    assert client.post(
+        "/api/communication/whatsapp-accounts/test-draft", headers=accountant_headers,
+        json={"access_token": "x", "phone_number_id": "000"},
+    ).status_code == 403
+
+
+def test_whatsapp_account_test_message_logs_failure(client, admin_headers):
+    created = client.post(
+        "/api/communication/whatsapp-accounts", headers=admin_headers,
+        json={"name": "Smoke WA Account 2", "phone_number_id": "000", "access_token": "fake-token-xyz"},
+    )
+    account_id = created.json()["id"]
+    resp = client.post(
+        f"/api/communication/whatsapp-accounts/{account_id}/send-test-message", headers=admin_headers,
+        json={"recipient": "923001234567"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "failed"
+    history = client.get("/api/communication/history", headers=admin_headers, params={"status_filter": "failed"})
+    assert any(h["notification_type"] == "test" for h in history.json())
+
+
+# ------------------------------------------------------------------- reports
+def test_pending_fee_report(client, admin_headers):
+    resp = client.get("/api/fee-reports/pending", headers=admin_headers)
+    assert resp.status_code == 200
+    assert isinstance(resp.json(), list)
+
+
+# --------------------------------------------------------------- permissions
+def test_accountant_cannot_view_providers(client, accountant_headers):
+    assert client.get("/api/communication/providers", headers=accountant_headers).status_code == 403
+
+
+def test_accountant_cannot_delete_student(client, accountant_headers, temp_student):
+    resp = client.delete(f"/api/students/{temp_student['student_id']}", headers=accountant_headers)
+    assert resp.status_code == 403
+
+
+def test_teacher_students_scoped_to_own_class(client, teacher_headers, temp_student):
+    # Teacher can list students, but only ever their own assigned class.
+    own = client.get("/api/students", headers=teacher_headers)
+    assert own.status_code == 200
+    assert all(s["class_name"] == TEST_CLASS for s in own.json())
+    # Requesting another class is rejected outright.
+    other = client.get("/api/students", headers=teacher_headers, params={"class_filter": "Grade 1"})
+    assert other.status_code == 403
+
+
+def test_teacher_absent_scope_limited_to_own_class(client, teacher_headers):
+    # Teacher's own class is the test class; requesting another class is rejected.
+    resp = client.get("/api/attendance/absent-today", headers=teacher_headers, params={"class_name": "Grade 1"})
+    assert resp.status_code == 403
+
+
+def test_backup_requires_admin(client, accountant_headers):
+    assert client.get("/api/backup/database", headers=accountant_headers).status_code == 403
