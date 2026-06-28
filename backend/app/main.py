@@ -8,9 +8,6 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 
-from sqlalchemy import text
-from app.db.session import SessionLocal
-
 
 
 
@@ -36,23 +33,10 @@ from app.services.notification_service import process_queue
 
 QUEUE_POLL_INTERVAL_SECONDS = 15
 @app.get("/api/debug-db")
-def debug_db():
-    db = SessionLocal()
-    try:
-        current_db = db.execute(text("SELECT current_database()")).scalar()
-        tables = db.execute(text("""
-            SELECT table_name
-            FROM information_schema.tables
-            WHERE table_schema='public'
-            ORDER BY table_name
-        """)).fetchall()
 
-        return {
-            "database": current_db,
-            "tables": [t[0] for t in tables]
-        }
-    finally:
-        db.close()
+
+from sqlalchemy import text
+from app.db.session import SessionLocal
 
 async def _notification_queue_worker() -> None:
     """Periodically sends pending/due-for-retry notifications. Runs for the
@@ -79,6 +63,26 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="School Management System", lifespan=lifespan)
+
+
+@app.get("/api/debug-db")
+def debug_db():
+    db = SessionLocal()
+    try:
+        current_db = db.execute(text("SELECT current_database()")).scalar()
+        tables = db.execute(text("""
+            SELECT table_name
+            FROM information_schema.tables
+            WHERE table_schema='public'
+            ORDER BY table_name
+        """)).fetchall()
+
+        return {
+            "database": current_db,
+            "tables": [t[0] for t in tables]
+        }
+    finally:
+        db.close()
 
 if settings.jwt_secret == "change-this-secret-in-production":
     logger.warning(
