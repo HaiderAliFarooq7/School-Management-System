@@ -69,6 +69,7 @@ def debug_db():
     db = SessionLocal()
     try:
         current_db = db.execute(text("SELECT current_database()")).scalar()
+
         tables = db.execute(text("""
             SELECT table_name
             FROM information_schema.tables
