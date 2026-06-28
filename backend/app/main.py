@@ -32,11 +32,10 @@ from app.routers import (
 from app.services.notification_service import process_queue
 
 QUEUE_POLL_INTERVAL_SECONDS = 15
-@app.get("/api/debug-db")
 
 
 from sqlalchemy import text
-from app.db.session import SessionLocal
+
 
 async def _notification_queue_worker() -> None:
     """Periodically sends pending/due-for-retry notifications. Runs for the
