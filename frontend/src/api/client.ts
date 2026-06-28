@@ -1,6 +1,15 @@
 import axios from 'axios'
 
-export const apiClient = axios.create({ baseURL: '/api' })
+// In local dev this stays '/api' and is handled by Vite's dev-server proxy
+// (see vite.config.ts) straight to the local backend. That proxy doesn't
+// exist in production — when the frontend (Vercel) and backend (Render) are
+// on different domains, VITE_API_URL must point at the deployed backend
+// (e.g. https://your-backend.onrender.com/api), set as a Vercel build-time
+// env var. Vite only inlines import.meta.env.* at build time, so changing
+// this requires a redeploy, not just an env var update.
+const baseURL = import.meta.env.VITE_API_URL || '/api'
+
+export const apiClient = axios.create({ baseURL })
 
 apiClient.interceptors.request.use((config) => {
   const token = localStorage.getItem('sms_token')
@@ -13,7 +22,12 @@ apiClient.interceptors.request.use((config) => {
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    // A 401 from /auth/login itself just means "wrong credentials" — that's
+    // a normal response the login form handles inline, not an expired
+    // session. Only force a redirect for 401s from every other endpoint
+    // (an expired/invalid token on an already-authenticated request).
+    const isLoginRequest = error.config?.url === '/auth/login'
+    if (error.response?.status === 401 && !isLoginRequest) {
       localStorage.removeItem('sms_token')
       localStorage.removeItem('sms_role')
       localStorage.removeItem('sms_assigned_class')

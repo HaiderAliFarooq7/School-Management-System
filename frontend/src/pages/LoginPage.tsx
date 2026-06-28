@@ -3,6 +3,19 @@ import { Box, Button, Paper, TextField, Typography, Alert } from '@mui/material'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
+function loginErrorMessage(err: unknown): string {
+  const e = err as { response?: { status?: number; data?: { detail?: string } }; request?: unknown; message?: string }
+  if (e.response) {
+    // The backend responded — show its actual reason (e.g. "Invalid username or password").
+    return e.response.data?.detail ?? `Login failed (HTTP ${e.response.status}).`
+  }
+  if (e.request) {
+    // Request went out but got no response — wrong API URL, CORS block, or backend down.
+    return 'Could not reach the server. Please check your connection or try again shortly.'
+  }
+  return e.message ?? 'Login failed. Please try again.'
+}
+
 export function LoginPage() {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
@@ -16,8 +29,8 @@ export function LoginPage() {
     try {
       const role = await login(username, password)
       navigate(role === 'Teacher' ? '/attendance' : '/')
-    } catch {
-      setError('Invalid username or password')
+    } catch (err) {
+      setError(loginErrorMessage(err))
     }
   }
 

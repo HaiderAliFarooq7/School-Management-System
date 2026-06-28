@@ -452,6 +452,7 @@ function VoucherLookup({
 function GenerateTab() {
   const { role } = useAuth()
   const isAdmin = role === 'Admin'
+  const queryClient = useQueryClient()
   const { data: grades } = useQuery({ queryKey: ['grades'], queryFn: listGrades })
   const [studentId, setStudentId] = useState('')
   const [classNameForGen, setClassNameForGen] = useState('')
@@ -464,7 +465,11 @@ function GenerateTab() {
 
   const generateMutation = useMutation({
     mutationFn: () => generateVoucher(Number(studentId), year, month, Number(amount) || grade?.fee_amount || 0),
-    onSuccess: (v) => setResult(`Voucher #${v.voucher_id} for ${v.fee_month}: total Rs. ${v.total_amount}, status ${v.status}`),
+    onSuccess: (v) => {
+      setResult(`Voucher #${v.voucher_id} for ${v.fee_month}: total Rs. ${v.total_amount}, status ${v.status}`)
+      queryClient.invalidateQueries({ queryKey: ['balance-sheet'] })
+      queryClient.invalidateQueries({ queryKey: ['students'] })
+    },
     onError: () => setResult('Failed to generate voucher — check the student ID.'),
   })
 
@@ -475,7 +480,11 @@ function GenerateTab() {
 
   const bulkMutation = useMutation({
     mutationFn: () => bulkGenerate(selectedClasses, bulkYear, bulkMonth),
-    onSuccess: (vouchers) => setBulkResult(`Generated/updated ${vouchers.length} voucher(s) for ${selectedClasses.join(', ')}.`),
+    onSuccess: (vouchers) => {
+      setBulkResult(`Generated/updated ${vouchers.length} voucher(s) for ${selectedClasses.join(', ')}.`)
+      queryClient.invalidateQueries({ queryKey: ['balance-sheet'] })
+      queryClient.invalidateQueries({ queryKey: ['students'] })
+    },
     onError: () => setBulkResult('Bulk generation failed.'),
   })
 
@@ -489,7 +498,7 @@ function GenerateTab() {
         overdue_only: false, charges_pending_only: false,
       })
       if (matches.length === 0) {
-        setBulkResult(`No vouchers found for ${selectedClasses.join(', ')} — ${bulkMonth}/${bulkYear}.`)
+        setBulkResult(`No vouchers found for ${selectedClasses.join(', ')} — ${bulkMonth}/${bulkYear}. Make sure the class and month above match what you used to generate them.`)
         return
       }
       if (!confirm(`Delete ${matches.length} voucher(s) for ${selectedClasses.join(', ')} — ${bulkMonth}/${bulkYear}? This cannot be undone.`)) {
@@ -498,6 +507,8 @@ function GenerateTab() {
       const result = await bulkDeleteVouchers(matches.map((m) => m.voucher_id))
       const skippedMsg = result.skipped.length ? ` ${result.skipped.length} skipped (already have a payment or discount).` : ''
       setBulkResult(`Deleted ${result.deleted} voucher(s).${skippedMsg}`)
+      queryClient.invalidateQueries({ queryKey: ['balance-sheet'] })
+      queryClient.invalidateQueries({ queryKey: ['students'] })
     } catch (e) {
       setBulkResult(apiErrorMessage(e))
     } finally {
@@ -566,8 +577,9 @@ function GenerateTab() {
         )}
       </Box>
       <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-        Generated the wrong vouchers? Use the same class/year/month above and click delete to remove
-        them in bulk — vouchers that already have a payment or discount recorded are skipped, not deleted.
+        Generated the wrong vouchers? Use the <strong>same class/year/month</strong> selected above and
+        click delete to remove them in bulk. This deletes outright, including any voucher that already
+        has a payment or discount recorded against it — double-check the confirmation count before continuing.
       </Typography>
       {bulkResult && <Typography sx={{ mt: 2 }}>{bulkResult}</Typography>}
     </Box>
