@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  Alert, Button, Dialog, DialogActions, DialogContent, DialogTitle, MenuItem, Select, TextField, Box,
+  Alert, Button, Dialog, DialogActions, DialogContent, DialogTitle, Divider, MenuItem, Select,
+  TextField, Box, Typography,
 } from '@mui/material'
+import { useAuth } from '../context/AuthContext'
 import { listGrades } from '../api/grades'
-import { updateStudent, type Student } from '../api/students'
+import { deleteStudent, updateStudent, type Student } from '../api/students'
 
 interface Props {
   student: Student | null
@@ -14,6 +16,7 @@ interface Props {
 
 export function StudentEditDialog({ student, open, onClose }: Props) {
   const queryClient = useQueryClient()
+  const { role } = useAuth()
   const { data: grades } = useQuery({ queryKey: ['grades'], queryFn: listGrades })
   const [form, setForm] = useState({
     name: '', father_name: '', class_name: '', dob: '', admission_date: '',
@@ -21,6 +24,7 @@ export function StudentEditDialog({ student, open, onClose }: Props) {
   })
 
   const [error, setError] = useState<string | null>(null)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   useEffect(() => {
     if (open && student) {
@@ -63,6 +67,26 @@ export function StudentEditDialog({ student, open, onClose }: Props) {
     onError: (e) => setError(String((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Could not save changes.')),
   })
 
+  const deleteMutation = useMutation({
+    mutationFn: () => deleteStudent(student!.student_id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['students'] })
+      queryClient.invalidateQueries({ queryKey: ['class-counts'] })
+      onClose()
+    },
+    onError: (e) => setDeleteError(String((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Could not delete this student.')),
+  })
+
+  function handleDelete() {
+    if (!student) return
+    const confirmed = confirm(
+      `Permanently delete ${student.name} (${student.registration_no})?\n\n` +
+        'This deletes the student and every record tied to them — fee vouchers, ' +
+        'extra charges, payment history, and attendance. This cannot be undone.',
+    )
+    if (confirmed) deleteMutation.mutate()
+  }
+
   const canSave = !!form.name.trim() && !!form.father_name.trim() && !!form.class_name
     && (!form.default_fee || Number(form.default_fee) >= 0)
 
@@ -97,6 +121,30 @@ export function StudentEditDialog({ student, open, onClose }: Props) {
             <MenuItem value="Active">Active</MenuItem>
             <MenuItem value="Inactive">Inactive</MenuItem>
           </Select>
+
+          {role === 'Admin' && (
+            <>
+              <Divider sx={{ mt: 1 }} />
+              <Box>
+                <Typography variant="subtitle2" color="error" gutterBottom>
+                  Danger Zone
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                  Permanently deletes this student along with all of their fee vouchers, extra
+                  charges, payment history, and attendance records. This cannot be undone.
+                </Typography>
+                {deleteError && <Alert severity="error" sx={{ mb: 1 }} onClose={() => setDeleteError(null)}>{deleteError}</Alert>}
+                <Button
+                  color="error"
+                  variant="outlined"
+                  disabled={deleteMutation.isPending}
+                  onClick={handleDelete}
+                >
+                  {deleteMutation.isPending ? 'Deleting…' : 'Delete Student'}
+                </Button>
+              </Box>
+            </>
+          )}
         </Box>
       </DialogContent>
       <DialogActions>

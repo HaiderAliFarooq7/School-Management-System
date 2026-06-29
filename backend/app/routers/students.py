@@ -16,6 +16,7 @@ from app.models.attendance import AttendanceRecord
 from app.models.fee_voucher import FeeVoucher
 from app.models.extra_charge import ExtraCharge
 from app.models.grade import Grade
+from app.models.payment_history import PaymentHistory
 from app.models.student import Student
 from app.schemas.student import StudentCreate, StudentOut, StudentSearchParams, StudentUpdate
 from app.schemas.student_import import (
@@ -409,9 +410,38 @@ def set_status(student_id: int, new_status: str, db: Session = Depends(get_db)):
 
 @router.delete("/{student_id}", dependencies=[Depends(require_role("Admin"))])
 def delete_student(student_id: int, db: Session = Depends(get_db)):
+    """Permanently deletes a student and every record tied to them: fee
+    vouchers (and their QR codes), extra charges, attendance history, and
+    contacts all cascade at the database level (ondelete=CASCADE on
+    student_id/voucher_id). PaymentHistory has no FK — it's keyed by
+    target_type/target_id — so it's purged explicitly here for this
+    student's vouchers and charges before the student row is deleted."""
     student = db.get(Student, student_id)
     if student is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Student not found")
+
+    voucher_ids = db.execute(
+        select(FeeVoucher.voucher_id).where(FeeVoucher.student_id == student_id)
+    ).scalars().all()
+    if voucher_ids:
+        db.execute(
+            delete(PaymentHistory).where(
+                PaymentHistory.target_type == "fee_voucher",
+                PaymentHistory.target_id.in_(voucher_ids),
+            )
+        )
+
+    charge_ids = db.execute(
+        select(ExtraCharge.charge_id).where(ExtraCharge.student_id == student_id)
+    ).scalars().all()
+    if charge_ids:
+        db.execute(
+            delete(PaymentHistory).where(
+                PaymentHistory.target_type == "extra_charge",
+                PaymentHistory.target_id.in_(charge_ids),
+            )
+        )
+
     db.delete(student)
     db.commit()
     return {"detail": "Deleted"}

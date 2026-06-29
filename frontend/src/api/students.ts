@@ -86,6 +86,12 @@ export async function setStudentStatus(studentId: number, newStatus: string): Pr
   return data
 }
 
+/** Permanently deletes the student and every record tied to them (fee
+ * vouchers, extra charges, attendance, payment history). Cannot be undone. */
+export async function deleteStudent(studentId: number): Promise<void> {
+  await apiClient.delete(`/students/${studentId}`)
+}
+
 export const CLASS_SEQUENCE = [
   'Playgroup', 'Nursery', 'Prep',
   'Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5',
