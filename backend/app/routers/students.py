@@ -16,8 +16,6 @@ from app.models.attendance import AttendanceRecord
 from app.models.fee_voucher import FeeVoucher
 from app.models.extra_charge import ExtraCharge
 from app.models.grade import Grade
-from app.models.notification_log import NotificationLog
-from app.models.notification_queue import NotificationQueue
 from app.models.student import Student
 from app.schemas.student import StudentCreate, StudentOut, StudentSearchParams, StudentUpdate
 from app.schemas.student_import import (
@@ -293,10 +291,10 @@ def promote_all_students(payload: PromoteRequest, db: Session = Depends(get_db))
     Since promotion marks the end of an academic year, it also prunes
     history that's no longer needed for every active student (promoted or
     graduating alike): fully-paid fee vouchers/extra charges are deleted
-    (pending ones are kept so nothing owed is lost), and all attendance and
-    notification queue/history rows are deleted outright. PaymentHistory is
-    untouched — it's a financial audit trail with no FK to vouchers/charges,
-    so it stays intact even after the voucher/charge it paid for is gone."""
+    (pending ones are kept so nothing owed is lost), and all attendance rows
+    are deleted outright. PaymentHistory is untouched — it's a financial
+    audit trail with no FK to vouchers/charges, so it stays intact even
+    after the voucher/charge it paid for is gone."""
     grades = {g.class_name: g for g in db.execute(select(Grade)).scalars().all()}
     grade_fees = {name: float(g.fee_amount) for name, g in grades.items()}
     students = db.execute(select(Student).where(Student.status == "Active")).scalars().all()
@@ -334,8 +332,6 @@ def promote_all_students(payload: PromoteRequest, db: Session = Depends(get_db))
         db.execute(delete(FeeVoucher).where(FeeVoucher.student_id.in_(student_ids), FeeVoucher.status == "Paid"))
         db.execute(delete(ExtraCharge).where(ExtraCharge.student_id.in_(student_ids), ExtraCharge.status == "Paid"))
         db.execute(delete(AttendanceRecord).where(AttendanceRecord.student_id.in_(student_ids)))
-        db.execute(delete(NotificationQueue).where(NotificationQueue.student_id.in_(student_ids)))
-        db.execute(delete(NotificationLog).where(NotificationLog.student_id.in_(student_ids)))
 
     db.commit()
     return {"promoted": promoted, "deactivated": deactivated}

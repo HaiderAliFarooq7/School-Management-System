@@ -11,7 +11,6 @@ import PersonAddIcon from '@mui/icons-material/PersonAdd'
 import PaidIcon from '@mui/icons-material/Paid'
 import { useNavigate } from 'react-router-dom'
 import { getAttendanceDailyStatus } from '../api/attendance'
-import { getCommunicationAnalytics } from '../api/communication'
 import { getDashboardStats } from '../api/dashboard'
 import { getFeeAnalytics } from '../api/feeReports'
 import { listGrades } from '../api/grades'
@@ -135,62 +134,6 @@ export function DashboardPage() {
       )}
 
       {isAdmin && <ChartErrorBoundary><AnalyticsSection /></ChartErrorBoundary>}
-      {isAdmin && <ChartErrorBoundary><CommunicationOverview /></ChartErrorBoundary>}
-    </Box>
-  )
-}
-
-function CommunicationOverview() {
-  const navigate = useNavigate()
-  const { data } = useQuery({
-    queryKey: ['dashboard-communication-analytics'],
-    queryFn: getCommunicationAnalytics,
-    refetchInterval: 30000,
-  })
-
-  const cards = [
-    { label: 'Pending', value: data?.pending ?? 0 },
-    { label: 'Processing', value: data?.processing ?? 0 },
-    { label: 'Sent Today', value: data?.sent_today ?? 0 },
-    { label: 'Failed Today', value: data?.failed_today ?? 0 },
-  ]
-
-  return (
-    <Box sx={{ mt: 5 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-        <Typography variant="h6">Communication Overview</Typography>
-        <Button size="small" onClick={() => navigate('/communication')}>Open Communication</Button>
-      </Box>
-      <Grid container spacing={2} sx={{ mb: 3 }}>
-        {cards.map((c) => (
-          <Grid key={c.label} size={{ xs: 6, sm: 3 }}>
-            <Card>
-              <CardContent>
-                <Typography color="text.secondary">{c.label}</Typography>
-                <Typography variant="h5">{c.value}</Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-        ))}
-      </Grid>
-      <Card>
-        <CardContent>
-          <Typography variant="subtitle1" gutterBottom>Sent vs. Failed — Last 7 Days</Typography>
-          {data && data.by_day.length > 0 ? (
-            <BarChart
-              height={260}
-              dataset={data.by_day}
-              xAxis={[{ dataKey: 'day', scaleType: 'band' }]}
-              series={[
-                { dataKey: 'sent', label: 'Sent', color: '#2e7d32' },
-                { dataKey: 'failed', label: 'Failed', color: '#c62828' },
-              ]}
-            />
-          ) : (
-            <Typography color="text.secondary">No notification activity yet.</Typography>
-          )}
-        </CardContent>
-      </Card>
     </Box>
   )
 }

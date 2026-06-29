@@ -1,5 +1,5 @@
 """End-to-end smoke tests across the core modules: auth, students, search,
-fees, attendance, communication, reports, and role-based permissions. They
+fees, attendance, reports, and role-based permissions. They
 assert the happy path works and that role restrictions are actually enforced
 by the backend (not just hidden in the UI)."""
 from datetime import date
@@ -112,79 +112,6 @@ def test_attendance_mark_and_absent_today(client, admin_headers, temp_student):
     assert any(r["student_id"] == sid for r in absent.json())
 
 
-# ------------------------------------------------------------ communication
-def test_communication_templates_and_providers(client, admin_headers):
-    assert client.get("/api/communication/templates", headers=admin_headers).status_code == 200
-    providers = client.get("/api/communication/providers", headers=admin_headers)
-    assert providers.status_code == 200
-    assert len(providers.json()) >= 1
-
-
-def test_communication_queue_custom_message(client, admin_headers, temp_student):
-    resp = client.post(
-        "/api/communication/queue", headers=admin_headers,
-        json={"student_id": temp_student["student_id"], "recipient_name": "Smoke Student",
-              "provider_type": "sms", "notification_type": "custom",
-              "recipient": "03001112222", "message": "Smoke test message"},
-    )
-    assert resp.status_code == 200
-    assert resp.json()["status"] == "pending"
-
-
-def test_analytics_admin_only(client, admin_headers, accountant_headers):
-    assert client.get("/api/communication/analytics", headers=admin_headers).status_code == 200
-    assert client.get("/api/communication/analytics", headers=accountant_headers).status_code == 403
-
-
-def test_whatsapp_account_create_never_exposes_token(client, admin_headers):
-    resp = client.post(
-        "/api/communication/whatsapp-accounts", headers=admin_headers,
-        json={"name": "Smoke WA Account", "phone_number_id": "000", "access_token": "fake-token-xyz"},
-    )
-    assert resp.status_code == 200
-    body = resp.json()
-    assert "access_token" not in body and "access_token_encrypted" not in body
-    assert body["has_access_token"] is True
-    assert "fake-token-xyz" not in resp.text
-
-
-def test_whatsapp_account_test_draft_never_exposes_token(client, admin_headers):
-    # No real Meta credentials in this test environment — must fail cleanly
-    # (not crash) and never include the access token in the response.
-    resp = client.post(
-        "/api/communication/whatsapp-accounts/test-draft", headers=admin_headers,
-        json={"access_token": "fake-token-xyz", "phone_number_id": "000"},
-    )
-    assert resp.status_code == 200
-    body = resp.json()
-    assert body["status"] == "disconnected"
-    assert "fake-token-xyz" not in resp.text and '"access_token"' not in resp.text.lower()
-
-
-def test_whatsapp_accounts_admin_only(client, accountant_headers):
-    assert client.get("/api/communication/whatsapp-accounts", headers=accountant_headers).status_code == 403
-    assert client.post(
-        "/api/communication/whatsapp-accounts/test-draft", headers=accountant_headers,
-        json={"access_token": "x", "phone_number_id": "000"},
-    ).status_code == 403
-
-
-def test_whatsapp_account_test_message_logs_failure(client, admin_headers):
-    created = client.post(
-        "/api/communication/whatsapp-accounts", headers=admin_headers,
-        json={"name": "Smoke WA Account 2", "phone_number_id": "000", "access_token": "fake-token-xyz"},
-    )
-    account_id = created.json()["id"]
-    resp = client.post(
-        f"/api/communication/whatsapp-accounts/{account_id}/send-test-message", headers=admin_headers,
-        json={"recipient": "923001234567"},
-    )
-    assert resp.status_code == 200
-    assert resp.json()["status"] == "failed"
-    history = client.get("/api/communication/history", headers=admin_headers, params={"status_filter": "failed"})
-    assert any(h["notification_type"] == "test" for h in history.json())
-
-
 # ------------------------------------------------------------------- reports
 def test_pending_fee_report(client, admin_headers):
     resp = client.get("/api/fee-reports/pending", headers=admin_headers)
@@ -193,9 +120,6 @@ def test_pending_fee_report(client, admin_headers):
 
 
 # --------------------------------------------------------------- permissions
-def test_accountant_cannot_view_providers(client, accountant_headers):
-    assert client.get("/api/communication/providers", headers=accountant_headers).status_code == 403
-
 
 def test_accountant_cannot_delete_student(client, accountant_headers, temp_student):
     resp = client.delete(f"/api/students/{temp_student['student_id']}", headers=accountant_headers)

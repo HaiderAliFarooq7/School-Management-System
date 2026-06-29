@@ -11,8 +11,6 @@ from sqlalchemy.orm import Session
 from app.models.attendance import AttendanceRecord
 from app.models.extra_charge import ExtraCharge
 from app.models.fee_voucher import FeeVoucher
-from app.models.notification_log import NotificationLog
-from app.models.notification_queue import NotificationQueue
 from app.models.payment_history import PaymentHistory
 from app.models.qr_code import QRCode
 from app.models.student import Student
@@ -233,7 +231,7 @@ def wipe_all_student_data(db: Session) -> None:
     """Deletes every student and all dependent records, in the correct order,
     inside the caller's transaction (no commit here). Mirrors the existing
     /api/backup/reset endpoint's cleanup, plus attendance explicitly."""
-    for model in (QRCode, NotificationQueue, NotificationLog, StudentContact, PaymentHistory, ExtraCharge, FeeVoucher, AttendanceRecord, Student):
+    for model in (QRCode, StudentContact, PaymentHistory, ExtraCharge, FeeVoucher, AttendanceRecord, Student):
         db.execute(delete(model))
 
 

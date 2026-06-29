@@ -13,11 +13,6 @@ class Settings(BaseSettings):
 
     data_dir: Path = Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "SMS"
 
-    # Symmetric key for encrypting credentials stored in the DB (e.g. WhatsApp
-    # Business access tokens). Generate with:
-    # python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
-    credentials_encryption_key: str = ""
-
     # Comma-separated list of allowed browser origins for CORS, needed when the
     # frontend is hosted separately from the backend (e.g. Vercel + Render).
     # When the frontend is instead served by this same app (StaticFiles mount

@@ -13,11 +13,8 @@ from sqlalchemy import delete, select
 from app.db.session import SessionLocal
 from app.main import app
 from app.models.attendance import AttendanceRecord
-from app.models.communication_provider import CommunicationProvider
 from app.models.fee_voucher import FeeVoucher
 from app.models.grade import Grade
-from app.models.notification_log import NotificationLog
-from app.models.notification_queue import NotificationQueue
 from app.models.role import Role
 from app.models.student import Student
 from app.models.user import User
@@ -52,9 +49,6 @@ def _seed_test_principals():
                 db.commit()
             existing = db.execute(select(User).where(User.username == username)).scalar_one_or_none()
             if existing:
-                # Clear any notifications this user queued in a prior run first,
-                # else the FK on notification_queue.created_by blocks the delete.
-                db.execute(delete(NotificationQueue).where(NotificationQueue.created_by == existing.user_id))
                 db.delete(existing)
                 db.commit()
             user = User(
@@ -69,26 +63,16 @@ def _seed_test_principals():
             created_user_ids.append(user.user_id)
         yield
     finally:
-        # Clean up any students left in the test class plus their dependents,
-        # and any notifications queued by the throwaway users (these may have
-        # had their student_id nulled out when the student was deleted).
-        if created_user_ids:
-            db.execute(delete(NotificationQueue).where(NotificationQueue.created_by.in_(created_user_ids)))
+        # Clean up any students left in the test class plus their dependents.
         student_ids = db.execute(
             select(Student.student_id).where(Student.class_name == TEST_CLASS)
         ).scalars().all()
         if student_ids:
-            db.execute(delete(NotificationQueue).where(NotificationQueue.student_id.in_(student_ids)))
             db.execute(delete(AttendanceRecord).where(AttendanceRecord.student_id.in_(student_ids)))
             db.execute(delete(FeeVoucher).where(FeeVoucher.student_id.in_(student_ids)))
             db.execute(delete(Student).where(Student.student_id.in_(student_ids)))
         db.execute(delete(User).where(User.user_id.in_(created_user_ids)))
         db.execute(delete(Grade).where(Grade.class_name == TEST_CLASS))
-        # WhatsApp "Send Test Message" diagnostic logs (student_id is always
-        # NULL for these — they're not tied to a student) — wipe them so
-        # repeated test runs don't pollute the real Communication History.
-        db.execute(delete(NotificationLog).where(NotificationLog.notification_type == "test"))
-        db.execute(delete(CommunicationProvider).where(CommunicationProvider.name.like("Smoke WA Account%")))
         db.commit()
         db.close()
 

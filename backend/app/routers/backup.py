@@ -16,8 +16,6 @@ from app.deps import require_role
 from app.logging_config import logger
 from app.models.extra_charge import ExtraCharge
 from app.models.fee_voucher import FeeVoucher
-from app.models.notification_log import NotificationLog
-from app.models.notification_queue import NotificationQueue
 from app.models.payment_history import PaymentHistory
 from app.models.qr_code import QRCode
 from app.models.student import Student
@@ -189,12 +187,12 @@ async def import_students(file: UploadFile, db: Session = Depends(get_db)):
 @router.post("/reset")
 def reset_database(payload: ResetRequest, db: Session = Depends(get_db)):
     """Clears all operational data (students, vouchers, charges, history,
-    contacts, notifications, QR codes) but leaves school settings, roles,
-    and user accounts intact. Requires an explicit confirm flag."""
+    contacts, QR codes) but leaves school settings, roles, and user accounts
+    intact. Requires an explicit confirm flag."""
     if not payload.confirm:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Set confirm=true to proceed with reset.")
 
-    for model in (QRCode, NotificationQueue, NotificationLog, StudentContact, PaymentHistory, ExtraCharge, FeeVoucher, Student):
+    for model in (QRCode, StudentContact, PaymentHistory, ExtraCharge, FeeVoucher, Student):
         db.execute(delete(model))
     db.commit()
     return {"detail": "All operational data has been reset."}

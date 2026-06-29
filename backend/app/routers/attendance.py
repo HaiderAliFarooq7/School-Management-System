@@ -1,14 +1,13 @@
 from datetime import date as date_type
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.db.session import SessionLocal, get_db
+from app.db.session import get_db
 from app.deps import CurrentUser, get_current_user, require_role, scope_class_filter
 from app.models.attendance import AttendanceRecord
 from app.models.grade import Grade
-from app.models.school import School
 from app.models.student import Student
 from app.schemas.attendance import (
     AbsentTodayRow,
@@ -17,63 +16,17 @@ from app.schemas.attendance import (
     AttendanceSummaryRow,
     MarkAttendanceRequest,
 )
-from app.services.notification_service import get_enabled_channel, queue_notification, render_named_template
 
 router = APIRouter(prefix="/api/attendance", tags=["attendance"])
-
-
-def _queue_absent_notifications(student_ids: list[int], class_name: str, attendance_date: date_type, created_by: int) -> None:
-    """Runs after the attendance response has been sent — never blocks
-    `mark_attendance`. Opens its own DB session since the request-scoped one
-    is closed by the time a background task runs."""
-    db = SessionLocal()
-    try:
-        school = db.execute(select(School).limit(1)).scalar_one_or_none()
-        if school is None or not school.auto_notify_absent or not student_ids:
-            return
-        channel = get_enabled_channel(db)
-        if channel is None:
-            return
-        students = db.execute(select(Student).where(Student.student_id.in_(student_ids))).scalars().all()
-        for student in students:
-            if not student.phone:
-                continue
-            try:
-                message = render_named_template(
-                    db, "Attendance Absent",
-                    {
-                        "student_name": student.name,
-                        "parent_name": student.father_name,
-                        "class": class_name,
-                        "date": attendance_date.isoformat(),
-                        "school_name": school.name,
-                    },
-                )
-            except ValueError:
-                continue
-            queue_notification(
-                db,
-                provider_type=channel,
-                notification_type="attendance_absent",
-                recipient=student.phone,
-                message=message,
-                student_id=student.student_id,
-                recipient_name=student.name,
-                created_by=created_by,
-            )
-    finally:
-        db.close()
 
 
 @router.post("/mark", response_model=list[AttendanceOut], dependencies=[Depends(require_role("Admin", "Teacher"))])
 def mark_attendance(
     payload: MarkAttendanceRequest,
-    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_current_user),
 ):
     results = []
-    absent_student_ids = []
     for entry in payload.entries:
         existing = db.execute(
             select(AttendanceRecord).where(
@@ -99,15 +52,7 @@ def mark_attendance(
             )
             db.add(record)
             results.append(record)
-        if entry.status == "Absent":
-            absent_student_ids.append(entry.student_id)
     db.commit()
-
-    if absent_student_ids:
-        background_tasks.add_task(
-            _queue_absent_notifications, absent_student_ids, payload.class_name, payload.attendance_date, current_user.user_id,
-        )
-
     return results
 
 
@@ -211,8 +156,7 @@ def get_absent_today(
     current_user: CurrentUser = Depends(get_current_user),
 ):
     """Students with at least one Absent record for the given day (default
-    today) — feeds the Communication module's manual "Send to all absent
-    today" bulk action. Teachers only ever see their own assigned class."""
+    today). Teachers only ever see their own assigned class."""
     target_date = attendance_date or date_type.today()
     effective_class = scope_class_filter(current_user, class_name)
 

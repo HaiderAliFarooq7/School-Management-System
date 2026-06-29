@@ -56,8 +56,8 @@ export function PromoteStudentsPage() {
         amount is added to each student's monthly fee when they move up. Students currently in{' '}
         <strong>Grade 10</strong> are marked <strong>Inactive</strong> instead of promoted further.
         Promoting also cleans up the past year's data for every active student: fully-paid fee vouchers
-        and extra charges are deleted (anything still pending is kept), and all attendance and
-        notification history is permanently deleted to reduce database size.
+        and extra charges are deleted (anything still pending is kept), and all attendance
+        history is permanently deleted to reduce database size.
       </Typography>
 
       {error && (
@@ -118,7 +118,7 @@ export function PromoteStudentsPage() {
           <Typography>
             This will move every active student ({totalActive} total) to the next class and apply the
             fee increases you entered. Grade 10 students will be set to Inactive. It will also{' '}
-            <strong>permanently delete</strong> all attendance and notification history for every active
+            <strong>permanently delete</strong> all attendance history for every active
             student, and delete any fee voucher or extra charge that's already fully paid (pending ones
             are kept). This action cannot be undone automatically — continue?
           </Typography>

@@ -234,8 +234,8 @@ export function StudentImportWizard({ open, onClose }: Props) {
             {importMode === 'delete_all' && (
               <Alert severity="warning" sx={{ mt: 2 }}>
                 This permanently deletes every student, attendance record, fee voucher, extra charge,
-                contact, and notification history currently in the system before importing. This cannot
-                be undone. Make sure you have a backup first.
+                and contact currently in the system before importing. This cannot be undone. Make sure
+                you have a backup first.
               </Alert>
             )}
           </Box>
