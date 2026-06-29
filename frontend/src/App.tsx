@@ -13,8 +13,6 @@ import { FeeVouchersPage } from './pages/FeeVouchersPage'
 import { FeeReportsPage } from './pages/FeeReportsPage'
 import { ExtraChargesPage } from './pages/ExtraChargesPage'
 import { AttendancePage } from './pages/AttendancePage'
-import { CommunicationPage } from './pages/CommunicationPage'
-import { WhatsAppAccountsPage } from './pages/WhatsAppAccountsPage'
 import { SchoolSettingsPage } from './pages/SchoolSettingsPage'
 import { UserManagementPage } from './pages/UserManagementPage'
 import { BackupPage } from './pages/BackupPage'
@@ -52,12 +50,10 @@ export default function App() {
                     <Route path="/fees/vouchers" element={<FeeVouchersPage />} />
                     <Route path="/fees/reports" element={<FeeReportsPage />} />
                     <Route path="/charges" element={<ExtraChargesPage />} />
-                    <Route path="/communication" element={<CommunicationPage />} />
                   </Route>
 
                   <Route element={<ProtectedRoute allowedRoles={['Admin']} />}>
                     <Route path="/students/promote" element={<PromoteStudentsPage />} />
-                    <Route path="/whatsapp-accounts" element={<WhatsAppAccountsPage />} />
                     <Route path="/settings" element={<SchoolSettingsPage />} />
                     <Route path="/users" element={<UserManagementPage />} />
                     <Route path="/backup" element={<BackupPage />} />

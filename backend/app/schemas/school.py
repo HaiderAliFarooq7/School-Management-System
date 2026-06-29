@@ -14,28 +14,7 @@ class SchoolUpdate(BaseModel):
     challan_note: str | None = None
 
 
-class NotificationSettingsUpdate(BaseModel):
-    sms_enabled: bool = False
-    sms_gateway: str = ""
-    sms_api_key: str = ""
-    sms_api_secret: str = ""
-    sms_sender_id: str = ""
-    email_enabled: bool = False
-    smtp_server: str = ""
-    smtp_port: int = 587
-    smtp_email: str = ""
-    smtp_password: str = ""
-
-
-class CommunicationSettingsUpdate(BaseModel):
-    """Attendance auto-notify flag for the Communication Module — separate
-    endpoint from the legacy notification-settings (sms/email gateway
-    credentials) above."""
-
-    auto_notify_absent: bool = False
-
-
-class SchoolOut(SchoolUpdate, NotificationSettingsUpdate, CommunicationSettingsUpdate):
+class SchoolOut(SchoolUpdate):
     school_id: int
 
     model_config = ConfigDict(from_attributes=True)

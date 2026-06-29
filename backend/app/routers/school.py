@@ -9,7 +9,7 @@ from app.config import LOGO_DIR
 from app.db.session import get_db
 from app.deps import require_role
 from app.models.school import School
-from app.schemas.school import CommunicationSettingsUpdate, NotificationSettingsUpdate, SchoolOut, SchoolUpdate
+from app.schemas.school import SchoolOut, SchoolUpdate
 
 router = APIRouter(prefix="/api/school", tags=["school"])
 
@@ -33,32 +33,6 @@ def get_school(db: Session = Depends(get_db)):
 
 @router.put("", response_model=SchoolOut, dependencies=[Depends(require_role("Admin"))])
 def update_school(payload: SchoolUpdate, db: Session = Depends(get_db)):
-    school = _get_or_create(db)
-    for field, value in payload.model_dump().items():
-        setattr(school, field, value)
-    db.commit()
-    return school
-
-
-@router.put(
-    "/notification-settings",
-    response_model=SchoolOut,
-    dependencies=[Depends(require_role("Admin"))],
-)
-def update_notification_settings(payload: NotificationSettingsUpdate, db: Session = Depends(get_db)):
-    school = _get_or_create(db)
-    for field, value in payload.model_dump().items():
-        setattr(school, field, value)
-    db.commit()
-    return school
-
-
-@router.put(
-    "/communication-settings",
-    response_model=SchoolOut,
-    dependencies=[Depends(require_role("Admin"))],
-)
-def update_communication_settings(payload: CommunicationSettingsUpdate, db: Session = Depends(get_db)):
     school = _get_or_create(db)
     for field, value in payload.model_dump().items():
         setattr(school, field, value)

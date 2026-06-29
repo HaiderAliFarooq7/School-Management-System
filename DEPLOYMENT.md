@@ -1,0 +1,303 @@
+# Deployment Guide
+
+## Overview
+
+This guide covers deploying the SMS Web application to production using:
+- **Backend**: Render.com (or self-hosted)
+- **Frontend**: Vercel or Netlify
+- **Database**: Neon (PostgreSQL) or self-hosted PostgreSQL 18+
+- **Storage**: File-based (school logos)
+
+All steps assume deployment to cloud platforms with proper secrets management.
+
+---
+
+## Prerequisites
+
+- Neon account (or PostgreSQL 18+ server)
+- Render account (for backend) or similar hosting
+- Vercel/Netlify account (for frontend)
+- GitHub account with this repo
+- Environment variables management (never commit `.env`)
+
+---
+
+## Step 1: Set Up Database (Neon)
+
+### 1.1 Create Neon Project
+1. Go to [Neon Console](https://console.neon.tech)
+2. Create a new project
+3. Note the connection string: `postgresql://user:password@host/dbname`
+4. Create a database user if needed
+
+### 1.2 Run Migrations
+
+Get the `alembic` tool working locally:
+
+```bash
+cd backend
+pip install -r requirements.txt
+export DATABASE_URL="postgresql://..."  # Your Neon URL
+alembic upgrade head
+```
+
+Verify tables exist:
+```bash
+DATABASE_URL="postgresql://..." alembic current
+```
+
+Expected migration history:
+- `9e8f7d6c5b4a` → `b7c8d9e0f1a2` (notification removal) → `c3d4e5f6a7b8` (complete removal)
+
+---
+
+## Step 2: Configure Backend (Render)
+
+### 2.1 Create Render Web Service
+
+1. **Connect GitHub** to Render
+2. **New Web Service** → Select this repository
+3. **Environment variables** (set before deploying):
+
+```
+DATABASE_URL=postgresql://user:password@host.neon.tech:5432/dbname
+JWT_SECRET=<generate-a-long-random-string>
+JWT_ALGORITHM=HS256
+JWT_EXPIRE_MINUTES=480
+CORS_ORIGINS=https://your-frontend-domain.vercel.app,https://your-alternate-domain.com
+PG_BIN_DIR=/usr/bin  # On Render, use /usr/bin, not Windows path
+```
+
+**DO NOT use default JWT_SECRET** — generate a secure random string:
+```bash
+python -c "import secrets; print(secrets.token_hex(32))"
+```
+
+### 2.2 Build Configuration
+
+**Build Command:**
+```bash
+pip install -r backend/requirements.txt && cd backend && alembic upgrade head
+```
+
+**Start Command:**
+```bash
+cd backend && uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
+
+**Health Check:**
+```
+/api/ping
+```
+
+### 2.3 Deploy
+
+Push to GitHub (e.g., to a `production` branch):
+```bash
+git push origin production
+```
+
+Render auto-deploys on push. Check logs for startup issues.
+
+---
+
+## Step 3: Configure Frontend (Vercel)
+
+### 3.1 Prepare Frontend
+
+Update `frontend/src/api/client.ts` to point to production backend:
+
+```typescript
+const API_BASE = process.env.VITE_API_BASE || 'https://your-backend.onrender.com/api';
+```
+
+In `frontend/.env.production`:
+```
+VITE_API_BASE=https://your-backend.onrender.com/api
+```
+
+### 3.2 Deploy to Vercel
+
+1. **GitHub Integration** → Select repository
+2. **Framework**: Vite
+3. **Build command**: `npm run build` (should run `tsc -b && vite build`)
+4. **Output directory**: `dist`
+5. **Environment Variables:**
+```
+VITE_API_BASE=https://your-backend.onrender.com/api
+```
+
+### 3.3 Deploy
+
+Push changes to GitHub:
+```bash
+git push origin main
+```
+
+Vercel auto-deploys.
+
+---
+
+## Step 4: Verify Production
+
+### 4.1 Backend Health
+
+```bash
+curl https://your-backend.onrender.com/api/ping
+# Expected: {"status":"ok"}
+```
+
+### 4.2 Authentication
+
+```bash
+curl -X POST https://your-backend.onrender.com/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"admin123"}'
+# Expected: {"access_token":"...", "token_type":"bearer", ...}
+```
+
+### 4.3 Frontend Loads
+
+Visit `https://your-frontend.vercel.app` and verify:
+- Page loads without console errors
+- Login form appears
+- No CORS errors in browser console
+
+### 4.4 First Login
+
+1. Open frontend
+2. Login with `admin` / `admin123`
+3. Dashboard loads
+4. **Change the default password immediately** in Settings → Users
+
+---
+
+## Step 5: Production Checklist
+
+- [ ] Database URL set and migrations applied (`alembic current` shows latest version)
+- [ ] JWT_SECRET is a long random string (not default)
+- [ ] CORS_ORIGINS includes frontend domain
+- [ ] Default admin password changed (Settings → Users)
+- [ ] Backend responds to `/api/ping`
+- [ ] Frontend loads and communicates with backend
+- [ ] SSL/HTTPS is enforced
+- [ ] Database backups are configured
+- [ ] Logs are being collected (Render provides log streaming)
+- [ ] School name and settings are configured
+- [ ] At least one user account exists (beyond default admin)
+
+---
+
+## Step 6: Ongoing Operations
+
+### Database Backups
+
+**Neon** provides automatic daily backups. To restore:
+1. Neon Console → Backups tab
+2. Select restore point
+3. Restore to a new branch or in-place
+
+**Self-hosted PostgreSQL**: Use standard `pg_dump` / `pg_restore`:
+```bash
+pg_dump -U sms_user sms_db > backup.sql
+pg_restore -U sms_user -d sms_db backup.sql
+```
+
+### Updating the Application
+
+1. Make changes locally
+2. Test locally (`npm run dev` + `uvicorn`)
+3. Commit and push to GitHub
+4. Render/Vercel auto-deploy on push
+5. Verify production at `https://your-backend/api/ping`
+
+### Rolling Back
+
+If a deployment breaks production:
+
+1. **Render**: Click "Manual Deploy" → select previous successful build
+2. **Vercel**: Deployments tab → select previous deployment → click "Promote to Production"
+3. **Database**: If migrations caused issues, restore from backup and re-run migrations
+
+### Monitoring
+
+- **Render Logs**: Visible in dashboard, auto-tails on deployment
+- **Frontend Console**: Browser DevTools → Console tab (watch for errors)
+- **Error Tracking**: Consider integrating Sentry for production error logging
+
+---
+
+## Troubleshooting
+
+### "FATAL: database does not exist"
+- Check `DATABASE_URL` is set correctly
+- Verify Neon/PostgreSQL server is running
+- Re-run `alembic upgrade head`
+
+### "401 Unauthorized" on API calls
+- Check `JWT_SECRET` matches between frontend and backend
+- Verify JWT token is being sent in `Authorization: Bearer <token>` header
+- Check token expiration (`JWT_EXPIRE_MINUTES` in env)
+
+### CORS errors in browser
+- Check `CORS_ORIGINS` includes frontend domain
+- Verify frontend is using correct backend URL (`VITE_API_BASE`)
+
+### "Default admin password still active"
+- SSH into production or use Render shell
+- Run: `curl -X POST https://your-backend/api/users/1/password -H "Authorization: Bearer <admin-token>" -d "{\"password\": \"new_password\"}"`
+- Change password via UI: Settings → Users → Edit Admin
+
+### Migrations fail
+- Check `DATABASE_URL` is correct
+- Verify PostgreSQL version is 18+ (Neon provides 18+)
+- Review migration file error message
+- If schema mismatch, consider restoring database from backup
+
+---
+
+## Environment Variables Reference
+
+| Variable | Example | Notes |
+|----------|---------|-------|
+| `DATABASE_URL` | `postgresql://user:pass@host:5432/dbname` | Required. Use Neon or self-hosted. |
+| `JWT_SECRET` | `<64-char random hex>` | Required. Generate with `secrets.token_hex(32)`. |
+| `JWT_ALGORITHM` | `HS256` | Default is fine. |
+| `JWT_EXPIRE_MINUTES` | `480` | 8 hours. Adjust as needed. |
+| `CORS_ORIGINS` | `https://frontend.vercel.app,https://other.com` | Comma-separated. Include all frontend domains. |
+| `PG_BIN_DIR` | `/usr/bin` | On Render. Leave empty or omit for managed databases. |
+
+---
+
+## Support & Rollback Plan
+
+### If Production Goes Down
+
+1. **Immediate**: Check Render/Vercel logs for error
+2. **Backend Issue**: Use Render's "Manual Deploy" to revert to last working build
+3. **Database Issue**: Restore from Neon backup, re-run migrations
+4. **Frontend Issue**: Revert to last successful Vercel deployment
+5. **All Else**: Contact hosting support with error logs
+
+### Recovery Plan
+- Maintain weekly backups (Neon auto-does this)
+- Keep migration history clean (never squash `alembic` revisions)
+- Document all production config changes
+- Test migrations on a staging database before production
+
+---
+
+## Next Steps
+
+After deploying:
+1. Customize school logo and settings (School Settings page)
+2. Create user accounts for teachers and accountants (Users page)
+3. Import student data (Backup → Import Students)
+4. Test all workflows with real data
+5. Set up email notifications (if implementing later)
+
+---
+
+**Version**: Phase 1 (June 2026)  
+**Last Updated**: 2026-06-29  
+**Deployment Status**: Ready for production

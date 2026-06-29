@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Alert, Avatar, Box, Button, Divider, FormControlLabel, Switch, TextField, Typography } from '@mui/material'
-import { getSchool, updateCommunicationSettings, updateSchool, uploadLogo, type School } from '../api/school'
+import { Alert, Avatar, Box, Button, TextField, Typography } from '@mui/material'
+import { getSchool, updateSchool, uploadLogo, type School } from '../api/school'
 
 export function SchoolSettingsPage() {
   const queryClient = useQueryClient()
@@ -39,12 +39,6 @@ export function SchoolSettingsPage() {
     mutationFn: (file: File) => uploadLogo(file),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['school'] }); setError(null) },
     onError: (e) => setError(apiErrorMessage(e, 'Logo upload failed.')),
-  })
-
-  const communicationMutation = useMutation({
-    mutationFn: (auto_notify_absent: boolean) => updateCommunicationSettings({ auto_notify_absent }),
-    onSuccess: (school) => { setForm((f) => ({ ...f, auto_notify_absent: school.auto_notify_absent })); setSaved(true); setError(null) },
-    onError: (e) => setError(apiErrorMessage(e, 'Could not update communication settings.')),
   })
 
   const set = (field: keyof School) => (e: React.ChangeEvent<HTMLInputElement>) =>
@@ -97,21 +91,6 @@ export function SchoolSettingsPage() {
           Save
         </Button>
       </Box>
-
-      <Divider sx={{ my: 3 }} />
-
-      <Typography variant="h6" gutterBottom>
-        Communication
-      </Typography>
-      <FormControlLabel
-        control={
-          <Switch
-            checked={form.auto_notify_absent ?? false}
-            onChange={(e) => communicationMutation.mutate(e.target.checked)}
-          />
-        }
-        label="Automatically queue an Absent notification when a teacher finishes marking attendance"
-      />
     </Box>
   )
 }

@@ -114,7 +114,7 @@ export function BackupPage() {
         Danger Zone
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-        Permanently deletes all students, vouchers, charges, contacts, and notification history.
+        Permanently deletes all students, vouchers, charges, and contacts.
         School settings, roles, and user accounts are kept. Run a backup first.
       </Typography>
       {!confirmReset ? (

@@ -27,14 +27,12 @@ import ReceiptIcon from '@mui/icons-material/Receipt'
 import PaidIcon from '@mui/icons-material/Paid'
 import RequestQuoteIcon from '@mui/icons-material/RequestQuote'
 import AssessmentIcon from '@mui/icons-material/Assessment'
-import NotificationsIcon from '@mui/icons-material/Notifications'
 import SettingsIcon from '@mui/icons-material/Settings'
 import BackupIcon from '@mui/icons-material/Backup'
 import EventAvailableIcon from '@mui/icons-material/EventAvailable'
 import ManageAccountsIcon from '@mui/icons-material/ManageAccounts'
 import TrendingUpIcon from '@mui/icons-material/TrendingUp'
 import FactCheckIcon from '@mui/icons-material/FactCheck'
-import WhatsAppIcon from '@mui/icons-material/WhatsApp'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 
@@ -60,8 +58,6 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Extra Charges', path: '/charges', icon: <RequestQuoteIcon />, roles: ['Admin', 'Accountant'] },
   { label: 'Attendance', path: '/attendance', icon: <EventAvailableIcon />, roles: ['Admin', 'Teacher'] },
   { label: 'Fee Status', path: '/fees/status', icon: <FactCheckIcon />, roles: ['Teacher'] },
-  { label: 'Communication', path: '/communication', icon: <NotificationsIcon />, roles: ['Admin', 'Accountant'] },
-  { label: 'WhatsApp Accounts', path: '/whatsapp-accounts', icon: <WhatsAppIcon />, roles: ['Admin'] },
   { label: 'School Settings', path: '/settings', icon: <SettingsIcon />, roles: ['Admin'] },
   { label: 'Users', path: '/users', icon: <ManageAccountsIcon />, roles: ['Admin'] },
   { label: 'Backup', path: '/backup', icon: <BackupIcon />, roles: ['Admin'] },

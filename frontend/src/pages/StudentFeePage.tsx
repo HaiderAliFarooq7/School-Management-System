@@ -11,13 +11,8 @@ import { downloadFile } from '../api/client'
 import { applyVoucherDiscount, deleteVoucher, editVoucher, generateVoucher, payVoucher } from '../api/feeVouchers'
 import { addCharge, applyChargeDiscount, deleteCharge, editCharge, payCharge } from '../api/extraCharges'
 import { listGrades } from '../api/grades'
-import { getSchool } from '../api/school'
-import {
-  createQueueEntry, listTemplates, renderTemplate, type NotificationCategory, type ProviderType,
-} from '../api/communication'
 import { DiscountDialog } from '../components/DiscountDialog'
 import { EditFigureDialog } from '../components/EditFigureDialog'
-import { MessagePreviewDialog } from '../components/MessagePreviewDialog'
 import { useAuth } from '../context/AuthContext'
 
 const STATUS_COLOR: Record<string, 'success' | 'warning' | 'error'> = {
@@ -91,50 +86,6 @@ function StudentLedger({ studentId }: { studentId: number }) {
   const { data: student } = useQuery({ queryKey: ['student', studentId], queryFn: () => getStudent(studentId) })
   const { data: sheet } = useQuery({ queryKey: ['balance-sheet', studentId], queryFn: () => getBalanceSheet(studentId) })
   const { data: grades } = useQuery({ queryKey: ['grades'], queryFn: listGrades })
-  const { data: school } = useQuery({ queryKey: ['school'], queryFn: getSchool })
-  const { data: templates } = useQuery({ queryKey: ['communication-templates'], queryFn: listTemplates })
-
-  const [composeType, setComposeType] = useState<NotificationCategory | null>(null)
-  const [channel, setChannel] = useState<ProviderType>('sms')
-  const [queueError, setQueueError] = useState<string | null>(null)
-  const [queueSuccess, setQueueSuccess] = useState<string | null>(null)
-
-  const queueMutation = useMutation({
-    mutationFn: (message: string) => {
-      if (!student || !composeType) throw new Error('Missing student/message type')
-      return createQueueEntry({
-        student_id: student.student_id,
-        recipient_name: student.name,
-        provider_type: channel,
-        notification_type: composeType,
-        recipient: student.phone ?? '',
-        message,
-      })
-    },
-    onSuccess: () => { setQueueSuccess('Message queued.'); setComposeType(null); setQueueError(null) },
-    onError: (e) => setQueueError(String((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? e)),
-  })
-
-  function templateFor(type: NotificationCategory) {
-    const name = type === 'attendance_absent' ? 'Attendance Absent' : type === 'fee_reminder' ? 'Pending Fee' : 'Custom Message'
-    return templates?.find((t) => t.name === name)
-  }
-
-  function previewFor(type: NotificationCategory): string {
-    const template = templateFor(type)
-    if (!student || !sheet) return ''
-    const firstUnpaid = sheet.vouchers.find((v) => v.status !== 'Paid')
-    const vars: Record<string, string> = {
-      student_name: student.name,
-      parent_name: student.father_name,
-      class: student.class_name,
-      date: new Date().toLocaleDateString(),
-      school_name: school?.name ?? '',
-      remaining_fee: sheet.total_pending.toFixed(0),
-      voucher_no: firstUnpaid ? `VC-${firstUnpaid.voucher_id}` : 'N/A',
-    }
-    return renderTemplate(template?.message ?? '', vars)
-  }
 
   const [payAmounts, setPayAmounts] = useState<Record<string, string>>({})
   const [discountTarget, setDiscountTarget] = useState<{ type: 'voucher' | 'charge'; id: number; max: number } | null>(null)
@@ -225,33 +176,6 @@ function StudentLedger({ studentId }: { studentId: number }) {
       <Typography color="text.secondary" gutterBottom>
         Class: {student.class_name} · Father: {student.father_name} · Phone: {student.phone || '—'} · CNIC: {student.cnic || '—'}
       </Typography>
-
-      <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 2 }}>
-        <Typography variant="body2" color="text.secondary" sx={{ alignSelf: 'center', mr: 1 }}>
-          Communication:
-        </Typography>
-        <Button size="small" variant="outlined" onClick={() => { setComposeType('custom'); setChannel('sms'); setQueueSuccess(null) }}>
-          Custom Message
-        </Button>
-        {isAdmin && (
-          <Button size="small" variant="outlined" onClick={() => { setComposeType('attendance_absent'); setChannel('sms'); setQueueSuccess(null) }}>
-            Attendance Message
-          </Button>
-        )}
-        <Button
-          size="small" variant="outlined" color={sheet.total_pending > 0 ? 'error' : 'inherit'}
-          onClick={() => { setComposeType('fee_reminder'); setChannel('sms'); setQueueSuccess(null) }}
-        >
-          Send Fee Reminder
-        </Button>
-        <Button
-          size="small" variant="outlined" color="success"
-          onClick={() => { setComposeType('fee_reminder'); setChannel('whatsapp'); setQueueSuccess(null) }}
-        >
-          Send WhatsApp Reminder
-        </Button>
-        {queueSuccess && <Chip size="small" color="success" label={queueSuccess} />}
-      </Box>
 
       <Grid container spacing={2} sx={{ mb: 1, mt: 1 }}>
         <Grid size={{ xs: 12, sm: 4 }}>
@@ -499,19 +423,6 @@ function StudentLedger({ studentId }: { studentId: number }) {
         }}
       />
 
-      <MessagePreviewDialog
-        open={!!composeType}
-        onClose={() => { setComposeType(null); setQueueError(null) }}
-        title={composeType === 'fee_reminder' ? 'Pending Fee Reminder' : composeType === 'attendance_absent' ? 'Attendance Message' : 'Custom Message'}
-        recipient={student.phone ?? ''}
-        message={composeType ? previewFor(composeType) : ''}
-        editableMessage={composeType === 'custom'}
-        channel={channel}
-        onChannelChange={setChannel}
-        onQueue={(message) => queueMutation.mutate(message)}
-        error={queueError}
-        isQueuing={queueMutation.isPending}
-      />
     </Box>
   )
 }
