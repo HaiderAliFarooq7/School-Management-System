@@ -7,8 +7,7 @@ import axios from 'axios'
 // (e.g. https://your-backend.onrender.com/api), set as a Vercel build-time
 // env var. Vite only inlines import.meta.env.* at build time, so changing
 // this requires a redeploy, not just an env var update.
-const baseURL = import.meta.env.VITE_API_URL || '/api'
-
+const baseURL = import.meta.env.VITE_API_BASE_URL || '/api'
 export const apiClient = axios.create({ baseURL })
 
 apiClient.interceptors.request.use((config) => {
