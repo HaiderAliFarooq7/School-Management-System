@@ -22,6 +22,10 @@ export function SchoolSettingsPage() {
 
   const mutation = useMutation({
     mutationFn: () =>
+      // challan_note isn't editable on this page (it's set from the Fee
+      // Vouchers page) but must still round-trip here — the backend applies
+      // every field in this payload, so omitting it would silently erase
+      // whatever note was previously set.
       updateSchool({
         name: form.name ?? '',
         address: form.address ?? '',
@@ -31,6 +35,7 @@ export function SchoolSettingsPage() {
         account_number: form.account_number ?? '',
         iban: form.iban ?? '',
         fee_due_day: form.fee_due_day ?? 10,
+        challan_note: form.challan_note ?? null,
       }),
     onSuccess: () => { setSaved(true); setError(null) },
     onError: (e) => setError(apiErrorMessage(e, 'Could not save settings.')),
