@@ -19,13 +19,14 @@ from app.routers import (
     students,
     users,
 )
-from app.services.bootstrap import ensure_default_admin, verify_database_ready
+from app.services.bootstrap import ensure_default_admin, ensure_default_logo, verify_database_ready
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     verify_database_ready()
     ensure_default_admin()
+    ensure_default_logo()
     logger.info("Application Started")
     yield
 

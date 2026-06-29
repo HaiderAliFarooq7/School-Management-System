@@ -1,8 +1,13 @@
+import shutil
+from pathlib import Path
+
 from sqlalchemy import inspect, select, text
 
+from app.config import LOGO_DIR
 from app.db.session import SessionLocal, engine
 from app.logging_config import logger
 from app.models.role import Role
+from app.models.school import School
 from app.models.user import User
 from app.services.auth_service import hash_password
 
@@ -10,6 +15,8 @@ DEFAULT_ADMIN_USERNAME = "admin"
 DEFAULT_ADMIN_PASSWORD = "admin123"
 
 REQUIRED_TABLE = "user_account"
+
+DEFAULT_LOGO_SRC = Path(__file__).resolve().parent.parent / "assets" / "default_school_logo.png"
 
 
 def verify_database_ready() -> None:
@@ -70,5 +77,32 @@ def ensure_default_admin() -> None:
             "Change this password immediately.",
             DEFAULT_ADMIN_USERNAME, DEFAULT_ADMIN_PASSWORD,
         )
+    finally:
+        db.close()
+
+
+def ensure_default_logo() -> None:
+    """First-boot convenience: if the school record has no logo yet, seeds it
+    with the bundled default logo (backend/app/assets/default_school_logo.png)
+    so a fresh deployment isn't blank. No-op the instant any logo_path is
+    already set, so it never overwrites an admin's own uploaded logo."""
+    if not DEFAULT_LOGO_SRC.exists():
+        return
+
+    db = SessionLocal()
+    try:
+        school = db.execute(select(School).limit(1)).scalar_one_or_none()
+        if school is not None and school.logo_path:
+            return
+
+        dest = LOGO_DIR / "school_logo.png"
+        shutil.copyfile(DEFAULT_LOGO_SRC, dest)
+
+        if school is None:
+            school = School()
+            db.add(school)
+        school.logo_path = str(dest)
+        db.commit()
+        logger.info("Seeded default school logo.")
     finally:
         db.close()
