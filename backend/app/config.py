@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -20,6 +21,23 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    @field_validator("database_url")
+    @classmethod
+    def _force_psycopg3_driver(cls, v: str) -> str:
+        """Hosting providers (Render, Neon, Heroku-style URLs) hand out bare
+        ``postgresql://`` or legacy ``postgres://`` connection strings with no
+        driver suffix. SQLAlchemy's default dialect for both of those schemes
+        is psycopg2, which this project does not install (psycopg v3 only,
+        via ``psycopg[binary]``) — causing ``ModuleNotFoundError: No module
+        named 'psycopg2'`` at engine-connect time. Normalize to the psycopg
+        v3 driver here so every consumer (the app engine, Alembic) gets a
+        working URL no matter what the platform's env var looks like."""
+        if v.startswith("postgres://"):
+            return "postgresql+psycopg://" + v[len("postgres://"):]
+        if v.startswith("postgresql://"):
+            return "postgresql+psycopg://" + v[len("postgresql://"):]
+        return v
 
     @property
     def cors_origin_list(self) -> list[str]:
