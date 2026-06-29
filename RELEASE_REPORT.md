@@ -4,6 +4,12 @@
 **Phase**: Phase 1-2 Complete (Notification Removal + Production Readiness Verification)  
 **Status**: ✅ **READY FOR PRODUCTION DEPLOYMENT**
 
+> **Superseded note (Phase 3):** a later "production-only" pass removed all
+> local-development fallbacks described as "safe" below — `DATABASE_URL` and
+> `CORS_ORIGINS` are now required (the app raises `RuntimeError` if either is
+> missing) and the frontend env var is `VITE_API_URL`, not `VITE_API_BASE_URL`.
+> See `CHANGELOG.md` and `README.md` for the current state.
+
 ---
 
 ## Executive Summary

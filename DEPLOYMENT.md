@@ -65,8 +65,9 @@ JWT_SECRET=<generate-a-long-random-string>
 JWT_ALGORITHM=HS256
 JWT_EXPIRE_MINUTES=480
 CORS_ORIGINS=https://your-frontend-domain.vercel.app,https://your-alternate-domain.com
-PG_BIN_DIR=/usr/bin  # On Render, use /usr/bin, not Windows path
 ```
+
+`DATABASE_URL` and `CORS_ORIGINS` are both required — the app raises a `RuntimeError` and refuses to start if either is missing. `PG_BIN_DIR` can be left unset unless `pg_dump`/`pg_restore` aren't already on Render's PATH.
 
 **DO NOT use default JWT_SECRET** — generate a secure random string:
 ```bash
@@ -87,7 +88,7 @@ cd backend && uvicorn app.main:app --host 0.0.0.0 --port 8000
 
 **Health Check:**
 ```
-/api/ping
+/health
 ```
 
 ### 2.3 Deploy
@@ -105,16 +106,13 @@ Render auto-deploys on push. Check logs for startup issues.
 
 ### 3.1 Prepare Frontend
 
-Update `frontend/src/api/client.ts` to point to production backend:
+The frontend reads the backend origin exclusively from `VITE_API_URL` (see `frontend/src/api/client.ts`) — there is no hardcoded or relative fallback. Set it as a Vercel project environment variable (not in a committed file):
 
-```typescript
-const API_BASE = process.env.VITE_API_BASE || 'https://your-backend.onrender.com/api';
+```
+VITE_API_URL=https://school-management-backend-1t21.onrender.com
 ```
 
-In `frontend/.env.production`:
-```
-VITE_API_BASE=https://your-backend.onrender.com/api
-```
+Note: no trailing slash, no `/api` suffix — the frontend appends `/api` itself. Vite only inlines `import.meta.env.*` at build time, so changing this value requires a redeploy.
 
 ### 3.2 Deploy to Vercel
 
@@ -124,7 +122,7 @@ VITE_API_BASE=https://your-backend.onrender.com/api
 4. **Output directory**: `dist`
 5. **Environment Variables:**
 ```
-VITE_API_BASE=https://your-backend.onrender.com/api
+VITE_API_URL=https://school-management-backend-1t21.onrender.com
 ```
 
 ### 3.3 Deploy
@@ -143,9 +141,14 @@ Vercel auto-deploys.
 ### 4.1 Backend Health
 
 ```bash
-curl https://your-backend.onrender.com/api/ping
-# Expected: {"status":"ok"}
+curl https://your-backend.onrender.com/
+# Expected: {"status":"ok","service":"School Management API"}
+
+curl https://your-backend.onrender.com/health
+# Expected: {"status":"healthy"}
 ```
+
+Check the Render deploy logs for the startup sequence: `Connected to Neon` → `Database Ready` → `Application Started`. If you instead see a `RuntimeError` about a missing `DATABASE_URL` or `CORS_ORIGINS`, the service failed to start — fix the environment variable and redeploy.
 
 ### 4.2 Authentication
 
@@ -240,8 +243,8 @@ If a deployment breaks production:
 - Check token expiration (`JWT_EXPIRE_MINUTES` in env)
 
 ### CORS errors in browser
-- Check `CORS_ORIGINS` includes frontend domain
-- Verify frontend is using correct backend URL (`VITE_API_BASE`)
+- Check `CORS_ORIGINS` includes the exact frontend domain
+- Verify the frontend was built with the correct `VITE_API_URL` (inlined at build time — check the deployed JS bundle if unsure, or just redeploy after fixing the Vercel env var)
 
 ### "Default admin password still active"
 - SSH into production or use Render shell
@@ -258,14 +261,23 @@ If a deployment breaks production:
 
 ## Environment Variables Reference
 
+**Backend (Render):**
+
 | Variable | Example | Notes |
 |----------|---------|-------|
-| `DATABASE_URL` | `postgresql://user:pass@host:5432/dbname` | Required. Use Neon or self-hosted. |
+| `DATABASE_URL` | `postgresql://user:pass@host.neon.tech/dbname` | **Required.** Neon connection string. Missing it raises `RuntimeError` at startup. |
+| `CORS_ORIGINS` | `https://frontend.vercel.app,https://other.com` | **Required.** Comma-separated. Missing it raises `RuntimeError` at startup. |
 | `JWT_SECRET` | `<64-char random hex>` | Required. Generate with `secrets.token_hex(32)`. |
-| `JWT_ALGORITHM` | `HS256` | Default is fine. |
-| `JWT_EXPIRE_MINUTES` | `480` | 8 hours. Adjust as needed. |
-| `CORS_ORIGINS` | `https://frontend.vercel.app,https://other.com` | Comma-separated. Include all frontend domains. |
-| `PG_BIN_DIR` | `/usr/bin` | On Render. Leave empty or omit for managed databases. |
+| `JWT_ALGORITHM` | `HS256` | Optional, defaults to `HS256`. |
+| `JWT_EXPIRE_MINUTES` | `480` | Optional, defaults to `480` (8 hours). |
+| `PG_BIN_DIR` | _(leave unset)_ | Optional. Only needed if `pg_dump`/`pg_restore` aren't already on PATH. |
+| `DATA_DIR` | `/var/data/sms` | Optional. Only durable if backed by a Render persistent disk mounted at `/var/data`. |
+
+**Frontend (Vercel):**
+
+| Variable | Example | Notes |
+|----------|---------|-------|
+| `VITE_API_URL` | `https://school-management-backend-1t21.onrender.com` | **Required.** Bare Render origin, no `/api` suffix. Inlined at build time — changing it requires a redeploy. |
 
 ---
 

@@ -1,14 +1,25 @@
 import axios from 'axios'
 
-// In local dev this stays '/api' and is handled by Vite's dev-server proxy
-// (see vite.config.ts) straight to the local backend. That proxy doesn't
-// exist in production — when the frontend (Vercel) and backend (Render) are
-// on different domains, VITE_API_URL must point at the deployed backend
-// (e.g. https://your-backend.onrender.com/api), set as a Vercel build-time
-// env var. Vite only inlines import.meta.env.* at build time, so changing
-// this requires a redeploy, not just an env var update.
-const baseURL = import.meta.env.VITE_API_BASE_URL || '/api'
-export const apiClient = axios.create({ baseURL })
+// Production-only: the frontend (Vercel) and backend (Render) are always on
+// different domains, so every request needs the full backend origin.
+// VITE_API_URL must be set to that origin (e.g.
+// https://school-management-backend-1t21.onrender.com — no trailing slash,
+// no /api suffix) as a Vercel build-time env var. Vite only inlines
+// import.meta.env.* at build time, so changing it requires a redeploy, not
+// just an env var update.
+const apiOrigin = import.meta.env.VITE_API_URL
+if (!apiOrigin) {
+  throw new Error(
+    'VITE_API_URL is not set. Configure it in the Vercel project settings to ' +
+      'the deployed Render backend origin (e.g. https://your-backend.onrender.com).',
+  )
+}
+
+/** The bare backend origin (no /api suffix) — for building URLs to public,
+ * non-axios resources like <img src> (e.g. the school logo). */
+export const apiOriginUrl = apiOrigin.replace(/\/+$/, '')
+
+export const apiClient = axios.create({ baseURL: `${apiOriginUrl}/api` })
 
 apiClient.interceptors.request.use((config) => {
   const token = localStorage.getItem('sms_token')

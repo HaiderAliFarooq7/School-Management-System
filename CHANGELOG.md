@@ -1,5 +1,41 @@
 # Changelog
 
+## [Unreleased] — Production-Only Conversion (Phase 3)
+
+Converted the application to run exclusively in production: GitHub → Render (backend) → Neon (PostgreSQL) → Vercel (frontend). The app no longer has a supported local-dev runtime; all local-development fallbacks were removed.
+
+### Backend
+
+- `app/config.py` — `database_url` and `cors_origins` no longer have defaults; both are now required and validated via `field_validator`s that raise `RuntimeError` with an actionable message if missing (e.g. "DATABASE_URL environment variable is not set..."). `.env` file loading was disabled (`env_file=None`) — config comes exclusively from real environment variables, matching how Render works. `data_dir` no longer derives from `LOCALAPPDATA` (Windows-only); it defaults to an ephemeral `/tmp/sms` with an optional `DATA_DIR` override for a Render persistent disk.
+- `app/main.py` — removed the `StaticFiles` mount that served `frontend/dist` directly (dead code now that the frontend is exclusively hosted on Vercel, never co-located with the backend). Added `GET /` (`{"status":"ok","service":"School Management API"}`) and `GET /health` (`{"status":"healthy"}`). Startup now calls `verify_database_ready()` before `ensure_default_admin()`, and logs `Application Started` once both complete.
+- `app/services/bootstrap.py` — added `verify_database_ready()`: runs `SELECT 1` against Neon (logs `Connected to Neon` or raises a clear `RuntimeError`), then confirms the `user_account` table exists via `sqlalchemy.inspect` (logs `Database Ready` or raises a clear error telling the operator to run `alembic upgrade head`). `ensure_default_admin()`'s docstring/wording updated from "dev/local convenience" to reflect it's the production first-boot path; its no-op-if-any-user-exists behavior (never recreates production data) is unchanged.
+- `app/services/backup_service.py` — `_bin_path()` no longer hardcodes a Windows `.exe` suffix (Render runs Linux). `_pg_conn_parts()` no longer silently falls back to `"localhost"` if a connection string has no hostname — it now raises a clear `RuntimeError`, since that would only happen from a malformed `DATABASE_URL`, not a legitimate local-dev case.
+- `backend/.env.example` — rewritten for production: Neon-style `DATABASE_URL` placeholder, required `CORS_ORIGINS` placeholder for the Vercel domain, no `localhost` values anywhere.
+- Removed `backend/test_smoke.db` (an untracked stray SQLite artifact; the test suite has never used SQLite — `conftest.py` runs against the real configured database).
+
+### Frontend
+
+- `src/api/client.ts` — renamed the required env var from `VITE_API_BASE_URL` to `VITE_API_URL` (now the bare backend origin, e.g. `https://school-management-backend-1t21.onrender.com`, no `/api` suffix — the client appends `/api` itself). Removed the relative `/api` local-dev-proxy fallback entirely; the module now throws a clear error if `VITE_API_URL` is unset. Added `apiOriginUrl` export for the few places that need an absolute URL outside axios (e.g. `<img src>`).
+- `src/pages/SchoolSettingsPage.tsx` — the school logo `<img>` previously used a hardcoded relative `/api/school/logo` path, which resolves against whatever domain the page is loaded from. Since the frontend (Vercel) and backend (Render) are different domains, this silently 404'd in production. Fixed to build the full backend URL via `apiOriginUrl`.
+- `src/api/backup.ts` — removed `exportStudentsUrl()`, a dead, unused function that returned the same kind of hardcoded relative `/api/...` path.
+- `vite.config.ts` — removed the `server.proxy` block that forwarded `/api` to `http://localhost:8000` (a dev-server-only feature with no effect on the production build, and no local dev server exists anymore).
+- `frontend/.env.example` — new file documenting the required `VITE_API_URL`.
+- `frontend/.gitignore` — added `.env` / `.env.*` (with `!.env.example` exception); previously nothing prevented a real frontend `.env` from being committed.
+
+### Removed
+
+- `start.ps1` — deleted. It started a local PostgreSQL service, built the frontend, and ran `uvicorn` bound to `0.0.0.0` for LAN access — entirely local-dev tooling with no place in a production-only architecture.
+
+### Verified
+
+- `pytest -q` — 15/15 passing with `DATABASE_URL`/`CORS_ORIGINS`/`JWT_SECRET` exported as real environment variables (no `.env` file read, matching Render).
+- Started `uvicorn` with real env vars: startup log shows `Connected to Neon` → `Database Ready` → `Application Started`, in that order. `GET /`, `GET /health`, and `GET /api/ping` all return `200`.
+- Confirmed `Settings()` raises `RuntimeError` with the documented message when `DATABASE_URL` or `CORS_ORIGINS` is unset.
+- Confirmed CORS: a preflight from an allowed Vercel-style origin gets `Access-Control-Allow-Origin` back; a preflight from an arbitrary origin does not.
+- Smoke-tested Login, Dashboard, Students, Attendance, Fee Reports, and School (logo) endpoints with a real JWT — all `200`.
+- `npm run build` with `VITE_API_URL` set — zero TypeScript errors, and the Render URL is confirmed inlined into the built JS bundle (`grep` on `dist/assets/*.js`).
+- `npm run build` with `VITE_API_URL` unset — build still succeeds (Vite can't fail at build time on a runtime-only check), but the bundle contains the "VITE_API_URL is not set" error string, confirming it fails loudly in the browser rather than silently.
+
 ## [Unreleased] — Production Readiness Pass (Phase 1)
 
 Full audit and cleanup pass to prepare the app for production. No deployment was performed — this work was done and verified entirely against the local Postgres database and local dev servers, per explicit instruction.

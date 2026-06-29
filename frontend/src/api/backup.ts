@@ -16,10 +16,6 @@ export async function restoreBackup(file: File): Promise<{ detail: string }> {
   return data
 }
 
-export function exportStudentsUrl(): string {
-  return '/api/backup/export-students.xlsx'
-}
-
 export async function importStudents(file: File): Promise<{ imported: number }> {
   const formData = new FormData()
   formData.append('file', file)

@@ -10,20 +10,27 @@ from app.config import settings
 
 def _pg_conn_parts() -> dict:
     # database_url looks like postgresql+psycopg://user:pass@host:port/dbname
+    # (Neon, in production). DATABASE_URL is required and validated at
+    # startup, so a missing hostname here means the connection string itself
+    # is malformed — fail loudly rather than silently guessing localhost.
     raw = settings.database_url.replace("+psycopg", "")
     parsed = urlparse(raw)
+    if not parsed.hostname:
+        raise RuntimeError("DATABASE_URL has no hostname — check the Neon connection string.")
     return {
         "user": parsed.username or "postgres",
         "password": parsed.password or "",
-        "host": parsed.hostname or "localhost",
+        "host": parsed.hostname,
         "port": str(parsed.port or 5432),
         "dbname": parsed.path.lstrip("/"),
     }
 
 
 def _bin_path(name: str) -> str:
+    """Render runs Linux, where pg_dump/pg_restore are just on PATH — PG_BIN_DIR
+    only needs to be set if they're installed somewhere non-standard."""
     if settings.pg_bin_dir:
-        return str(Path(settings.pg_bin_dir) / f"{name}.exe")
+        return str(Path(settings.pg_bin_dir) / name)
     return name
 
 

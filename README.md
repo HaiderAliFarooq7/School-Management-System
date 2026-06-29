@@ -1,99 +1,76 @@
 # School Management System — Web App
 
-A browser-based rewrite of the SMS_Python desktop app: FastAPI + PostgreSQL backend, React + TypeScript + MUI frontend. Runs on your computer; other devices on the same WiFi/LAN can use it from any browser.
+A browser-based rewrite of the SMS_Python desktop app: FastAPI backend, React + TypeScript + MUI frontend.
 
-## Current status — all 5 build phases complete
+**This application is production-only.** It is deployed exclusively to:
+
+```
+GitHub → Render (backend) → Neon (PostgreSQL) → Vercel (frontend)
+```
+
+There is no supported local/dev runtime — the backend refuses to start without a real Neon `DATABASE_URL` and a real `CORS_ORIGINS`, and the frontend build refuses to call anything but the `VITE_API_URL` configured in Vercel. See [DEPLOYMENT.md](DEPLOYMENT.md) for the full deploy procedure.
+
+## Features
 
 - **Auth & roles**: JWT login, Admin / Accountant / Teacher roles, Teacher access scoped to their assigned class.
 - **Students**: CRUD, search, advanced search, admission form with an optional **per-student default fee** (overrides the class fee for that student in all future voucher generation).
 - **Grades**: CRUD with in-use delete guard.
-- **Fees**: vouchers (generate/pay/delete), **bulk voucher generation class-wise** (uses each student's own default fee, falling back to the class fee), extra charges (add/pay/delete), **bulk extra-charge creation class-wise**, fee reports (monthly collection, class summary, overdue list, balance sheet), dashboard stats.
-- **Attendance**: per-class/date marking grid (Present/Absent/Late/Leave), monthly summary, Teacher access scoped to their own class, optional auto-queueing of Absent notifications when attendance is finished.
-- **Communication**: provider-independent notification subsystem (SMS / WhatsApp) with a pluggable provider abstraction (real gateways are placeholders for now), a background send queue with retry, editable templates with `{{variable}}` substitution, a queue/history/templates/providers console, bulk send (all absent today / pending-fee students / custom message), and per-student messaging from the fee page. Only one provider is active at a time; switching providers needs no change to Attendance/Fee/UI code.
-- **Backup & restore**: on-demand `pg_dump` that streams straight to your browser and is **never stored on the server** (free-hosting friendly), restore from an uploaded `.dump`, Excel export/import of students, full data reset (keeps school settings/users).
-- **User management**: create/deactivate users, assign roles and (for Teachers) a class. Any user can change their own password from the account menu (top-right).
-- **School settings**: school info, bank details, fee due day, attendance auto-notify toggle.
+- **Fees**: vouchers (generate/pay/delete), **bulk voucher generation class-wise**, extra charges (add/pay/delete), fee reports (monthly collection, class summary, overdue list, balance sheet), dashboard stats.
+- **Attendance**: per-class/date marking grid (Present/Absent/Late/Leave), monthly summary, Teacher access scoped to their own class.
+- **Backup & restore**: on-demand `pg_dump` that streams straight to the browser and is never stored on the server, restore from an uploaded `.dump`, Excel export/import of students, full data reset (keeps school settings/users).
+- **User management**: create/deactivate users, assign roles and (for Teachers) a class. Any user can change their own password from the account menu.
+- **School settings**: school info, bank details, fee due day, logo upload.
 
-> **Security note:** the bootstrap admin password is `admin123`. Change it immediately after first login via the account menu → **Change Password** (top-right).
+> **Security note:** on a brand-new (empty) database, the backend auto-creates a bootstrap admin account `admin` / `admin123` on first startup. Change this password immediately after first login via the account menu → **Change Password**.
 
-All of the above verified end-to-end against a real PostgreSQL database (not just SQLite) — login, CRUD, role enforcement, the voucher-regenerate-preserves-payment fix, bulk operations, attendance marking, and `pg_dump` backups were all exercised live.
+## Architecture
 
-## One-time setup
+| Layer | Service | Notes |
+| --- | --- | --- |
+| Source control | GitHub | Pushes to `main` trigger Render/Vercel auto-deploys. |
+| Backend | Render | FastAPI + uvicorn. Reads config exclusively from Render environment variables. |
+| Database | Neon | Managed PostgreSQL. Connected via `DATABASE_URL`, normalized to the psycopg v3 driver automatically. |
+| Frontend | Vercel | Static Vite/React build. Talks to the Render backend via `VITE_API_URL`, never a relative path. |
 
-1. **Install PostgreSQL** if you haven't already (postgresql.org installer, or `winget install PostgreSQL.PostgreSQL`).
-2. Create the app database and user (one-time, using the `postgres` superuser):
-   ```sql
-   CREATE ROLE sms_user LOGIN PASSWORD 'sms_pass';
-   CREATE DATABASE sms_db OWNER sms_user;
-   ```
-3. `cd SMS_Web/backend`, copy `.env.example` to `.env` and adjust `DATABASE_URL` / `JWT_SECRET` if you used different credentials. If `pg_dump`/`pg_restore` aren't on your system PATH, set `PG_BIN_DIR` in `.env` to your PostgreSQL `bin` folder (e.g. `C:\Program Files\PostgreSQL\18\bin`) so the Backup page works.
-4. Apply migrations and seed roles/admin:
-   ```powershell
-   .venv\Scripts\python.exe -m alembic upgrade head
-   .venv\Scripts\python.exe -m scripts.seed
-   ```
-   Bootstrap login: `admin` / `admin123` — change this immediately from the Users page.
-5. If migrating real data from the old desktop app, run `scripts/migrate_sqlite_to_postgres.py "<path to old sms.db>"` once, after step 4 and before real use.
+## Health checks
 
-## Running it day to day
+| Endpoint | Returns |
+| --- | --- |
+| `GET /` | `{"status":"ok","service":"School Management API"}` |
+| `GET /health` | `{"status":"healthy"}` |
 
-**Easiest — one command** (from `SMS_Web/`):
-```powershell
-.\start.ps1
-```
-This starts PostgreSQL if needed, applies any pending migrations, builds the frontend if it hasn't been built yet, and starts the server — printing both `http://localhost:8000` and your LAN address.
-
-**Manual equivalent**:
-```powershell
-cd SMS_Web/backend
-uvicorn app.main:app --host 0.0.0.0 --port 8000
-```
-FastAPI serves the built React app directly, so visiting `http://localhost:8000` (or `http://<this-pc-ip>:8000` from another device on the same WiFi) gives you the full app — no separate frontend server needed in production.
-
-First time only: allow the port through Windows Firewall so other devices can reach it:
-```powershell
-netsh advfirewall firewall add rule name="SMS Web" dir=in action=allow protocol=TCP localport=8000
-```
-
-## Frontend development mode
-
-```powershell
-cd SMS_Web/frontend
-npm run dev
-```
-Opens on `http://localhost:5173` with hot reload, proxying `/api` to the backend on port 8000. Rebuild with `npm run build` before relying on the backend to serve it directly.
-
-## API reference
-
-Browse `http://localhost:8000/docs` for the full interactive OpenAPI documentation — useful for testing any endpoint directly, including the role restrictions (try calling a Fee Vouchers endpoint with a Teacher token and confirm it's rejected). The raw OpenAPI schema is at `http://localhost:8000/openapi.json`.
-
-## Tests
-
-A backend smoke suite covers auth, role permissions, students, search, fees + PDF, attendance, communication, reports, and password change. It runs against the configured database, creating and cleaning up its own throwaway users/class/students (it never touches real data or the bootstrap admin):
-
-```powershell
-cd SMS_Web/backend
-.venv\Scripts\python.exe -m pytest -q
-```
+Startup logs print `Connected to Neon`, `Database Ready`, and `Application Started` in sequence — useful for confirming a Render deploy actually reached a healthy database.
 
 ## Environment variables
 
-Set in `backend/.env` (see `.env.example`):
+### Backend (Render) — see `backend/.env.example`
 
-| Variable | Default | Purpose |
+| Variable | Required | Purpose |
 | --- | --- | --- |
-| `DATABASE_URL` | `postgresql+psycopg://sms_user:sms_pass@localhost:5432/sms_db` | PostgreSQL connection (SQLAlchemy + psycopg v3). On most hosts this is provided for you. |
-| `JWT_SECRET` | `change-this-secret-in-production` | **Must** be set to a long random string in production — it signs all auth tokens. |
-| `JWT_ALGORITHM` | `HS256` | JWT signing algorithm. |
-| `JWT_EXPIRE_MINUTES` | `480` | Login session length (minutes). |
-| `PG_BIN_DIR` | _(empty — rely on PATH)_ | Folder containing `pg_dump`/`pg_restore` if they aren't on PATH (e.g. `C:\Program Files\PostgreSQL\18\bin`). Required for Backup/Restore. |
+| `DATABASE_URL` | Yes | Neon PostgreSQL connection string. Accepted as `postgres://`, `postgresql://`, or `postgresql+psycopg://` — all are normalized to the psycopg v3 driver. Missing this raises a `RuntimeError` at startup. |
+| `CORS_ORIGINS` | Yes | Comma-separated list of allowed frontend origins (the Vercel production domain, plus any custom domain). Missing this raises a `RuntimeError` at startup. |
+| `JWT_SECRET` | Yes | Long random string that signs auth tokens. |
+| `JWT_ALGORITHM` | No | Defaults to `HS256`. |
+| `JWT_EXPIRE_MINUTES` | No | Defaults to `480` (8 hours). |
+| `PG_BIN_DIR` | No | Only needed if `pg_dump`/`pg_restore` aren't already on PATH. |
+| `DATA_DIR` | No | Where the school logo and student photos are stored. Defaults to an ephemeral path; set to a Render persistent disk mount (e.g. `/var/data/sms`) to survive restarts. |
 
-## Deployment & free hosting
+### Frontend (Vercel) — see `frontend/.env.example`
 
-The app is designed to run on small/ephemeral hosting with no durable disk:
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `VITE_API_URL` | Yes | The deployed Render backend's bare origin (no trailing slash, no `/api` suffix), e.g. `https://school-management-backend-1t21.onrender.com`. The app appends `/api` itself. Missing this throws a clear error in the browser at load time. |
 
-- **Nothing transient is written to disk.** Backups, generated voucher/report PDFs, QR images, and Excel exports are produced in memory or a system temp file, streamed to the client, and deleted immediately. Only the **school logo** and **student photos** persist (under the OS app-data dir, configurable via `data_dir`).
-- **Logs rotate** (1 MB × 3 files) so they can't fill the disk; unhandled errors are logged server-side and return a clean generic message to the client (no stack traces leaked).
-- **Database:** point `DATABASE_URL` at your managed Postgres (e.g. a free Neon/Supabase/Railway instance). Run `alembic upgrade head` and `python -m scripts.seed` once on first deploy.
-- **Serving:** `uvicorn app.main:app --host 0.0.0.0 --port $PORT`. FastAPI serves the built React bundle from `frontend/dist`, so a single process serves both API and UI. Build the frontend with `npm run build` as part of your deploy.
-- **Backups on free hosting:** because the server keeps nothing, an admin should periodically click **Backup → Download Backup** to keep a local `.dump`, and use **Restore from Backup** to recover.
+## Tests
+
+The backend smoke suite runs in CI against a real PostgreSQL database (export `DATABASE_URL`, `CORS_ORIGINS`, and `JWT_SECRET` as environment variables before running):
+
+```
+pytest -q
+```
+
+It creates and tears down its own throwaway users/class/students — it never touches the bootstrap admin or real data.
+
+## Deployment
+
+See [DEPLOYMENT.md](DEPLOYMENT.md) for the full Render + Neon + Vercel setup, migration steps, and the production readiness checklist.

@@ -1,10 +1,8 @@
 from contextlib import asynccontextmanager
-from pathlib import Path
 
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
 from app.logging_config import logger
@@ -21,12 +19,14 @@ from app.routers import (
     students,
     users,
 )
-from app.services.bootstrap import ensure_default_admin
+from app.services.bootstrap import ensure_default_admin, verify_database_ready
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    verify_database_ready()
     ensure_default_admin()
+    logger.info("Application Started")
     yield
 
 
@@ -75,11 +75,16 @@ app.include_router(attendance.router)
 app.include_router(backup.router)
 
 
+@app.get("/")
+def root():
+    return {"status": "ok", "service": "School Management API"}
+
+
+@app.get("/health")
+def health():
+    return {"status": "healthy"}
+
+
 @app.get("/api/ping")
 def ping():
     return {"status": "ok"}
-
-
-_frontend_dist = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
-if _frontend_dist.exists():
-    app.mount("/", StaticFiles(directory=str(_frontend_dist), html=True), name="frontend")

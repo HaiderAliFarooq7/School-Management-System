@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Alert, Avatar, Box, Button, TextField, Typography } from '@mui/material'
+import { apiOriginUrl } from '../api/client'
 import { getSchool, updateSchool, uploadLogo, type School } from '../api/school'
 
 export function SchoolSettingsPage() {
@@ -53,7 +54,7 @@ export function SchoolSettingsPage() {
       {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>{error}</Alert>}
 
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
-        <Avatar src={data?.logo_path ? '/api/school/logo' : undefined} sx={{ width: 64, height: 64 }} variant="rounded" />
+        <Avatar src={data?.logo_path ? `${apiOriginUrl}/api/school/logo` : undefined} sx={{ width: 64, height: 64 }} variant="rounded" />
         <Button variant="outlined" onClick={() => fileInputRef.current?.click()}>
           Upload School Logo
         </Button>

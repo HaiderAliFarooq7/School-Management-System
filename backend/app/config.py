@@ -1,4 +1,3 @@
-import os
 from pathlib import Path
 
 from pydantic import field_validator
@@ -6,37 +5,65 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    database_url: str = "postgresql+psycopg://sms_user:sms_pass@localhost:5432/sms_db"
+    """Production-only configuration. Every value below is read from the
+    Render service's environment variables — there is no local/dev fallback
+    for the database or CORS origins; missing either one fails startup
+    immediately with a clear error rather than silently degrading."""
+
+    database_url: str | None = None
     jwt_secret: str = "change-this-secret-in-production"
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = 480  # 8 hours
-    pg_bin_dir: str = ""  # e.g. "C:\\Program Files\\PostgreSQL\\18\\bin" — empty means rely on PATH
+    pg_bin_dir: str = ""  # only needed if pg_dump/pg_restore aren't already on PATH
 
-    data_dir: Path = Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "SMS"
+    # Defaults to a guaranteed-writable ephemeral path. If a Render
+    # persistent disk is attached (mounted at /var/data by convention), set
+    # DATA_DIR=/var/data/sms so the school logo and student photos survive
+    # restarts/deploys; otherwise they're lost on every restart like the
+    # rest of this app's on-disk state.
+    data_dir: Path = Path("/tmp/sms")
 
-    # Comma-separated list of allowed browser origins for CORS, needed when the
-    # frontend is hosted separately from the backend (e.g. Vercel + Render).
-    # When the frontend is instead served by this same app (StaticFiles mount
-    # below), the browser never makes a cross-origin request and this is moot.
-    cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
+    # Comma-separated list of allowed browser origins for CORS — the Vercel
+    # production frontend domain, plus an optional custom domain. Required;
+    # there is no localhost default since this app never runs locally.
+    cors_origins: str | None = None
 
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_file=None, extra="ignore")
 
     @field_validator("database_url")
     @classmethod
-    def _force_psycopg3_driver(cls, v: str) -> str:
-        """Hosting providers (Render, Neon, Heroku-style URLs) hand out bare
-        ``postgresql://`` or legacy ``postgres://`` connection strings with no
-        driver suffix. SQLAlchemy's default dialect for both of those schemes
-        is psycopg2, which this project does not install (psycopg v3 only,
-        via ``psycopg[binary]``) — causing ``ModuleNotFoundError: No module
-        named 'psycopg2'`` at engine-connect time. Normalize to the psycopg
-        v3 driver here so every consumer (the app engine, Alembic) gets a
-        working URL no matter what the platform's env var looks like."""
+    def _require_and_normalize_database_url(cls, v: str | None) -> str:
+        """Render/Neon hand out bare ``postgresql://`` or legacy
+        ``postgres://`` connection strings with no driver suffix.
+        SQLAlchemy's default dialect for both schemes is psycopg2, which this
+        project does not install (psycopg v3 only, via ``psycopg[binary]``) —
+        causing ``ModuleNotFoundError: No module named 'psycopg2'`` at
+        engine-connect time. Normalize to the psycopg v3 driver here so every
+        consumer (the app engine, Alembic) gets a working URL. A missing
+        value fails fast: this app only ever talks to Neon in production,
+        there is no local-database fallback."""
+        if not v:
+            raise RuntimeError(
+                "DATABASE_URL environment variable is not set. Set it in the "
+                "Render dashboard to your Neon PostgreSQL connection string "
+                "before starting this application."
+            )
         if v.startswith("postgres://"):
             return "postgresql+psycopg://" + v[len("postgres://"):]
         if v.startswith("postgresql://"):
             return "postgresql+psycopg://" + v[len("postgresql://"):]
+        return v
+
+    @field_validator("cors_origins")
+    @classmethod
+    def _require_cors_origins(cls, v: str | None) -> str:
+        if not v:
+            raise RuntimeError(
+                "CORS_ORIGINS environment variable is not set. Set it in the "
+                "Render dashboard to your Vercel production frontend domain "
+                "(plus any custom domain), comma-separated — e.g. "
+                "https://your-app.vercel.app,https://your-custom-domain.com"
+            )
         return v
 
     @property
