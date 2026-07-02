@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy import delete, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 import io
@@ -381,10 +382,20 @@ def get_student(
 
 @router.post("", response_model=StudentOut, dependencies=[Depends(require_role("Admin", "Accountant"))])
 def add_student(payload: StudentCreate, db: Session = Depends(get_db)):
-    student = Student(registration_no=_generate_registration_no(db), **payload.model_dump())
-    db.add(student)
-    db.commit()
-    return _to_out(db, student)
+    # Registration numbers come from a read-increment-write, so two admissions
+    # submitted at the same moment can collide on the unique constraint —
+    # retry with a fresh number instead of surfacing a 500.
+    for attempt in range(3):
+        student = Student(registration_no=_generate_registration_no(db), **payload.model_dump())
+        db.add(student)
+        try:
+            db.commit()
+            return _to_out(db, student)
+        except IntegrityError as exc:
+            db.rollback()
+            if "registration_no" not in str(exc.orig) or attempt == 2:
+                raise
+    raise HTTPException(status.HTTP_409_CONFLICT, "Could not allocate a registration number — please try again.")
 
 
 @router.put("/{student_id}", response_model=StudentOut, dependencies=[Depends(require_role("Admin", "Accountant"))])

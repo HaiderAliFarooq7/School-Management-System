@@ -289,7 +289,11 @@ def bulk_generate(payload: BulkGenerateRequest, db: Session = Depends(get_db)):
 def pay_voucher(voucher_id: int, payload: PayVoucherRequest, db: Session = Depends(get_db)):
     if payload.amount <= 0:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Payment amount must be greater than zero.")
-    voucher = db.get(FeeVoucher, voucher_id)
+    # Row lock so two clerks recording a payment for the same voucher at the
+    # same moment can't both pass the balance check and overshoot the total.
+    voucher = db.execute(
+        select(FeeVoucher).where(FeeVoucher.voucher_id == voucher_id).with_for_update()
+    ).scalar_one_or_none()
     if voucher is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Voucher not found")
     remaining = float(voucher.total_amount) - float(voucher.paid_amount) - float(voucher.discount_amount)

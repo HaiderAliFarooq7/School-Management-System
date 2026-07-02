@@ -26,6 +26,21 @@ def mark_attendance(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_current_user),
 ):
+    # Teachers can only ever mark their own assigned class, and only students
+    # who actually belong to that class — otherwise a Teacher token could
+    # write attendance for any student in the school.
+    scope_class_filter(current_user, payload.class_name)
+    class_student_ids = set(
+        db.execute(
+            select(Student.student_id).where(Student.class_name == payload.class_name)
+        ).scalars().all()
+    )
+    outside_class = [e.student_id for e in payload.entries if e.student_id not in class_student_ids]
+    if outside_class:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            f"{len(outside_class)} student(s) in this request are not enrolled in {payload.class_name}.",
+        )
     results = []
     for entry in payload.entries:
         existing = db.execute(
@@ -64,6 +79,7 @@ def get_attendance_for_class_date(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_current_user),
 ):
+    class_name = scope_class_filter(current_user, class_name)
     return db.execute(
         select(AttendanceRecord).where(
             AttendanceRecord.class_name == class_name,
@@ -81,6 +97,7 @@ def get_attendance_summary(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_current_user),
 ):
+    class_name = scope_class_filter(current_user, class_name)
     students = db.execute(
         select(Student).where(Student.class_name == class_name, Student.status == "Active")
     ).scalars().all()
@@ -189,6 +206,7 @@ def get_student_attendance_history(
     student = db.get(Student, student_id)
     if student is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Student not found")
+    scope_class_filter(current_user, student.class_name)
     return db.execute(
         select(AttendanceRecord)
         .where(

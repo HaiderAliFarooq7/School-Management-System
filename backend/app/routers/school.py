@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.config import LOGO_DIR
 from app.db.session import get_db
-from app.deps import require_role
+from app.deps import get_current_user, require_role
 from app.models.school import School
 from app.schemas.school import SchoolOut, SchoolUpdate
 
@@ -26,8 +26,10 @@ def _get_or_create(db: Session) -> School:
     return school
 
 
-@router.get("", response_model=SchoolOut)
+@router.get("", response_model=SchoolOut, dependencies=[Depends(get_current_user)])
 def get_school(db: Session = Depends(get_db)):
+    """Any signed-in user. Only /logo below stays public — it's referenced
+    from plain <img src> tags that can't carry an Authorization header."""
     return _get_or_create(db)
 
 

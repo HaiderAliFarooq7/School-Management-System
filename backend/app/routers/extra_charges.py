@@ -74,7 +74,10 @@ def bulk_add_charge(payload: BulkChargeRequest, db: Session = Depends(get_db)):
 def pay_charge(charge_id: int, payload: PayChargeRequest, db: Session = Depends(get_db)):
     if payload.amount <= 0:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Payment amount must be greater than zero.")
-    charge = db.get(ExtraCharge, charge_id)
+    # Row lock — same concurrent-payment guard as pay_voucher.
+    charge = db.execute(
+        select(ExtraCharge).where(ExtraCharge.charge_id == charge_id).with_for_update()
+    ).scalar_one_or_none()
     if charge is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Charge not found")
     if payload.amount > float(charge.remaining_amount) + 1e-6:
