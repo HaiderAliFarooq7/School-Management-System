@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams } from 'react-router-dom'
 import {
-  Box, Button, Card, CardContent, Chip, Divider, Grid, MenuItem, Select, Table, TableBody,
+  Box, Button, Card, CardContent, Chip, Divider, Grid, MenuItem, Select, Skeleton, Table, TableBody,
   TableCell, TableHead, TableRow, TextField, Typography,
 } from '@mui/material'
 import { getBalanceSheet } from '../api/feeReports'
@@ -15,6 +15,7 @@ import { DiscountDialog } from '../components/DiscountDialog'
 import { EditFigureDialog } from '../components/EditFigureDialog'
 import { useConfirm, useToast } from '../components/feedback'
 import { useAuth } from '../context/AuthContext'
+import { useDebouncedValue } from '../hooks/useDebouncedValue'
 
 const STATUS_COLOR: Record<string, 'success' | 'warning' | 'error'> = {
   Paid: 'success', Partial: 'warning', Unpaid: 'error', Open: 'warning',
@@ -35,10 +36,11 @@ export function StudentFeePage() {
 function StudentSearchPicker() {
   const navigate = useNavigate()
   const [query, setQuery] = useState('')
+  const debouncedQuery = useDebouncedValue(query)
   const { data: results, isFetching } = useQuery({
-    queryKey: ['student-fee-search', query],
-    queryFn: () => listStudents({ search: query }),
-    enabled: query.length > 0,
+    queryKey: ['student-fee-search', debouncedQuery],
+    queryFn: () => listStudents({ search: debouncedQuery }),
+    enabled: debouncedQuery.length > 0,
   })
 
   return (
@@ -166,7 +168,22 @@ function StudentLedger({ studentId }: { studentId: number }) {
     onError: (e) => toast(apiErrorMessage(e), 'error'),
   })
 
-  if (!student || !sheet) return <Typography>Loading...</Typography>
+  if (!student || !sheet) {
+    return (
+      <Box>
+        <Skeleton width={280} height={44} />
+        <Skeleton width={420} sx={{ mb: 2 }} />
+        <Grid container spacing={2}>
+          {[0, 1, 2].map((i) => (
+            <Grid key={i} size={{ xs: 12, sm: 4 }}>
+              <Skeleton variant="rounded" height={96} />
+            </Grid>
+          ))}
+        </Grid>
+        <Skeleton variant="rounded" height={240} sx={{ mt: 3 }} />
+      </Box>
+    )
+  }
 
   const defaultGenAmount = grades?.find((g) => g.class_name === student.class_name)?.fee_amount ?? 0
 

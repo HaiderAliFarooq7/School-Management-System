@@ -1,8 +1,8 @@
 import { Component, useState, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
-  Box, Button, Card, CardContent, Chip, Grid, MenuItem, Select, Table, TableBody, TableCell, TableHead, TableRow,
-  Typography,
+  Box, Button, Card, CardContent, Chip, Grid, MenuItem, Select, Skeleton, Table, TableBody, TableCell, TableHead,
+  TableRow, Typography,
 } from '@mui/material'
 import { BarChart } from '@mui/x-charts/BarChart'
 import { LineChart } from '@mui/x-charts/LineChart'
@@ -25,7 +25,7 @@ export function DashboardPage() {
   const { role } = useAuth()
   const isAdmin = role === 'Admin'
   const canSeeAttendanceStatus = role === 'Admin' || role === 'Accountant'
-  const { data } = useQuery({ queryKey: ['dashboard-stats'], queryFn: getDashboardStats, enabled: canSeeAttendanceStatus })
+  const { data, isLoading } = useQuery({ queryKey: ['dashboard-stats'], queryFn: getDashboardStats, enabled: canSeeAttendanceStatus })
   const { data: attendanceStatus } = useQuery({
     queryKey: ['attendance-daily-status'],
     queryFn: () => getAttendanceDailyStatus(),
@@ -82,7 +82,9 @@ export function DashboardPage() {
               <Card>
                 <CardContent>
                   <Typography color="text.secondary">{c.label}</Typography>
-                  <Typography variant="h4">{c.value}</Typography>
+                  <Typography variant="h4">
+                    {isLoading ? <Skeleton width={90} /> : c.value}
+                  </Typography>
                 </CardContent>
               </Card>
             </Grid>
@@ -165,7 +167,11 @@ function AnalyticsSection() {
       </Box>
 
       {isLoading || !data ? (
-        <Typography color="text.secondary">Loading…</Typography>
+        <Grid container spacing={3}>
+          <Grid size={{ xs: 12, md: 7 }}><Skeleton variant="rounded" height={340} /></Grid>
+          <Grid size={{ xs: 12, md: 5 }}><Skeleton variant="rounded" height={340} /></Grid>
+          <Grid size={{ xs: 12 }}><Skeleton variant="rounded" height={340} /></Grid>
+        </Grid>
       ) : (
         <Grid container spacing={3}>
           <Grid size={{ xs: 12, md: 7 }}>

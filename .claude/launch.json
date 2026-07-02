@@ -6,7 +6,10 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
       "cwd": "frontend",
-      "port": 5173
+      "port": 5173,
+      "env": {
+        "VITE_API_URL": "https://school-management-backend-1t21.onrender.com"
+      }
     }
   ]
 }
