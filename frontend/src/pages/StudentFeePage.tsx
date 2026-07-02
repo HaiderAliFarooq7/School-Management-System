@@ -13,6 +13,7 @@ import { addCharge, applyChargeDiscount, deleteCharge, editCharge, payCharge } f
 import { listGrades } from '../api/grades'
 import { DiscountDialog } from '../components/DiscountDialog'
 import { EditFigureDialog } from '../components/EditFigureDialog'
+import { useConfirm, useToast } from '../components/feedback'
 import { useAuth } from '../context/AuthContext'
 
 const STATUS_COLOR: Record<string, 'success' | 'warning' | 'error'> = {
@@ -83,6 +84,8 @@ function StudentLedger({ studentId }: { studentId: number }) {
   const queryClient = useQueryClient()
   const { role } = useAuth()
   const isAdmin = role === 'Admin'
+  const toast = useToast()
+  const confirmAction = useConfirm()
   const { data: student } = useQuery({ queryKey: ['student', studentId], queryFn: () => getStudent(studentId) })
   const { data: sheet } = useQuery({ queryKey: ['balance-sheet', studentId], queryFn: () => getBalanceSheet(studentId) })
   const { data: grades } = useQuery({ queryKey: ['grades'], queryFn: listGrades })
@@ -100,13 +103,13 @@ function StudentLedger({ studentId }: { studentId: number }) {
 
   const payVoucherMutation = useMutation({
     mutationFn: ({ voucherId, amount }: { voucherId: number; amount: number }) => payVoucher(voucherId, amount),
-    onSuccess: refresh,
-    onError: (e) => alert(apiErrorMessage(e)),
+    onSuccess: () => { toast('Payment recorded.'); refresh() },
+    onError: (e) => toast(apiErrorMessage(e), 'error'),
   })
   const payChargeMutation = useMutation({
     mutationFn: ({ chargeId, amount }: { chargeId: number; amount: number }) => payCharge(chargeId, amount),
-    onSuccess: refresh,
-    onError: (e) => alert(apiErrorMessage(e)),
+    onSuccess: () => { toast('Payment recorded.'); refresh() },
+    onError: (e) => toast(apiErrorMessage(e), 'error'),
   })
   const voucherDiscountMutation = useMutation({
     mutationFn: ({ voucherId, amount, reason }: { voucherId: number; amount: number; reason: string }) =>
@@ -122,13 +125,13 @@ function StudentLedger({ studentId }: { studentId: number }) {
   })
   const deleteVoucherMutation = useMutation({
     mutationFn: (voucherId: number) => deleteVoucher(voucherId),
-    onSuccess: refresh,
-    onError: (e) => alert(apiErrorMessage(e)),
+    onSuccess: () => { toast('Voucher deleted.'); refresh() },
+    onError: (e) => toast(apiErrorMessage(e), 'error'),
   })
   const deleteChargeMutation = useMutation({
     mutationFn: (chargeId: number) => deleteCharge(chargeId),
-    onSuccess: refresh,
-    onError: (e) => alert(apiErrorMessage(e)),
+    onSuccess: () => { toast('Charge deleted.'); refresh() },
+    onError: (e) => toast(apiErrorMessage(e), 'error'),
   })
   const editVoucherMutation = useMutation({
     mutationFn: ({ voucherId, values }: { voucherId: number; values: { total_amount: number; paid_amount: number; discount_amount: number; discount_reason: string | null } }) =>
@@ -151,16 +154,16 @@ function StudentLedger({ studentId }: { studentId: number }) {
   const [genAmount, setGenAmount] = useState('')
   const generateMutation = useMutation({
     mutationFn: () => generateVoucher(studentId, genYear, genMonth, Number(genAmount) || student?.default_fee || 0),
-    onSuccess: () => { refresh(); setGenAmount('') },
-    onError: (e) => alert(apiErrorMessage(e)),
+    onSuccess: () => { toast('Voucher generated.'); refresh(); setGenAmount('') },
+    onError: (e) => toast(apiErrorMessage(e), 'error'),
   })
 
   const [chargeDesc, setChargeDesc] = useState('')
   const [chargeAmount, setChargeAmount] = useState('')
   const addChargeMutation = useMutation({
     mutationFn: () => addCharge(studentId, chargeDesc, Number(chargeAmount) || 0),
-    onSuccess: () => { refresh(); setChargeDesc(''); setChargeAmount('') },
-    onError: (e) => alert(apiErrorMessage(e)),
+    onSuccess: () => { toast('Charge added.'); refresh(); setChargeDesc(''); setChargeAmount('') },
+    onError: (e) => toast(apiErrorMessage(e), 'error'),
   })
 
   if (!student || !sheet) return <Typography>Loading...</Typography>
@@ -272,7 +275,15 @@ function StudentLedger({ studentId }: { studentId: number }) {
                         <Button
                           size="small"
                           color="error"
-                          onClick={() => { if (confirm(`Delete the ${v.fee_month} voucher?`)) deleteVoucherMutation.mutate(v.voucher_id) }}
+                          onClick={async () => {
+                            const ok = await confirmAction({
+                              title: `Delete the ${v.fee_month} voucher?`,
+                              message: 'The voucher and its recorded figures will be permanently removed.',
+                              confirmLabel: 'Delete',
+                              destructive: true,
+                            })
+                            if (ok) deleteVoucherMutation.mutate(v.voucher_id)
+                          }}
                         >
                           Delete
                         </Button>
@@ -357,7 +368,15 @@ function StudentLedger({ studentId }: { studentId: number }) {
                         <Button
                           size="small"
                           color="error"
-                          onClick={() => { if (confirm(`Delete "${c.description}"?`)) deleteChargeMutation.mutate(c.charge_id) }}
+                          onClick={async () => {
+                            const ok = await confirmAction({
+                              title: `Delete "${c.description}"?`,
+                              message: 'The charge and its recorded figures will be permanently removed.',
+                              confirmLabel: 'Delete',
+                              destructive: true,
+                            })
+                            if (ok) deleteChargeMutation.mutate(c.charge_id)
+                          }}
                         >
                           Delete
                         </Button>

@@ -3,8 +3,10 @@ import { useMutation } from '@tanstack/react-query'
 import { Alert, Box, Button, CircularProgress, Divider, Typography } from '@mui/material'
 import { importStudents, resetDatabase, restoreBackup, runBackup } from '../api/backup'
 import { downloadFile } from '../api/client'
+import { useConfirm } from '../components/feedback'
 
 export function BackupPage() {
+  const confirmAction = useConfirm()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const restoreInputRef = useRef<HTMLInputElement>(null)
   const [message, setMessage] = useState<{ text: string; severity: 'success' | 'error' } | null>(null)
@@ -74,12 +76,17 @@ export function BackupPage() {
           type="file"
           accept=".dump"
           hidden
-          onChange={(e) => {
+          onChange={async (e) => {
             const file = e.target.files?.[0]
-            if (file && confirm('Restoring will overwrite ALL current data with the backup. Continue?')) {
-              restoreMutation.mutate(file)
-            }
             e.target.value = ''
+            if (!file) return
+            const ok = await confirmAction({
+              title: 'Restore from backup?',
+              message: 'Restoring will overwrite ALL current data with the contents of the backup file. This cannot be undone.',
+              confirmLabel: 'Restore',
+              destructive: true,
+            })
+            if (ok) restoreMutation.mutate(file)
           }}
         />
       </Box>

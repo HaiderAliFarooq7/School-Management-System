@@ -14,6 +14,7 @@ import {
 import { getSchool, updateSchool } from '../api/school'
 import { listStudents, type Student } from '../api/students'
 import { DiscountDialog } from '../components/DiscountDialog'
+import { useConfirm, useToast } from '../components/feedback'
 import { useAuth } from '../context/AuthContext'
 
 const STATUS_COLOR: Record<string, 'success' | 'warning' | 'error'> = {
@@ -51,6 +52,8 @@ function FindAndPayTab() {
   const navigate = useNavigate()
   const { role } = useAuth()
   const isAdmin = role === 'Admin'
+  const toast = useToast()
+  const confirmAction = useConfirm()
   const { data: grades } = useQuery({ queryKey: ['grades'], queryFn: listGrades })
 
   const [discountError, setDiscountError] = useState<string | null>(null)
@@ -84,10 +87,11 @@ function FindAndPayTab() {
   const payMutation = useMutation({
     mutationFn: ({ voucherId, amount }: { voucherId: number; amount: number }) => payVoucher(voucherId, amount),
     onSuccess: () => {
+      toast('Payment recorded.')
       filterMutation.mutate()
       queryClient.invalidateQueries({ queryKey: ['students'] })
     },
-    onError: (e) => alert(apiErrorMessage(e)),
+    onError: (e) => toast(apiErrorMessage(e), 'error'),
   })
 
   const discountMutation = useMutation({
@@ -104,8 +108,11 @@ function FindAndPayTab() {
 
   const deleteMutation = useMutation({
     mutationFn: (voucherId: number) => deleteVoucher(voucherId),
-    onSuccess: () => filterMutation.mutate(),
-    onError: () => alert('Cannot delete — this voucher already has a payment or discount recorded against it.'),
+    onSuccess: () => {
+      toast('Voucher deleted.')
+      filterMutation.mutate()
+    },
+    onError: (e) => toast(apiErrorMessage(e), 'error'),
   })
 
   const bulkDeleteMutation = useMutation({
@@ -116,9 +123,9 @@ function FindAndPayTab() {
       const skippedMsg = result.skipped.length
         ? ` ${result.skipped.length} voucher(s) skipped (already have a payment or discount).`
         : ''
-      alert(`Deleted ${result.deleted} voucher(s).${skippedMsg}`)
+      toast(`Deleted ${result.deleted} voucher(s).${skippedMsg}`, result.skipped.length ? 'warning' : 'success')
     },
-    onError: (e) => alert(apiErrorMessage(e)),
+    onError: (e) => toast(apiErrorMessage(e), 'error'),
   })
 
   const selectedIds = Array.from(selectionModel as Iterable<number>)
@@ -154,7 +161,15 @@ function FindAndPayTab() {
         <Button
           size="small"
           color="error"
-          onClick={() => { if (confirm('Delete this voucher?')) deleteMutation.mutate(row.voucher_id) }}
+          onClick={async () => {
+            const ok = await confirmAction({
+              title: 'Delete this voucher?',
+              message: 'The voucher and its recorded figures will be permanently removed.',
+              confirmLabel: 'Delete',
+              destructive: true,
+            })
+            if (ok) deleteMutation.mutate(row.voucher_id)
+          }}
         >
           Delete
         </Button>
@@ -282,10 +297,14 @@ function FindAndPayTab() {
                   <Button
                     size="small"
                     color="error"
-                    onClick={() => {
-                      if (confirm(`Delete ${selectedIds.length} selected voucher(s)?`)) {
-                        bulkDeleteMutation.mutate(selectedIds)
-                      }
+                    onClick={async () => {
+                      const ok = await confirmAction({
+                        title: `Delete ${selectedIds.length} selected voucher(s)?`,
+                        message: 'This permanently removes the selected vouchers, including any with payments or discounts recorded.',
+                        confirmLabel: 'Delete',
+                        destructive: true,
+                      })
+                      if (ok) bulkDeleteMutation.mutate(selectedIds)
                     }}
                   >
                     Delete Selected
@@ -298,11 +317,15 @@ function FindAndPayTab() {
                 size="small"
                 color="error"
                 variant="outlined"
-                onClick={() => {
+                onClick={async () => {
                   const ids = (filterMutation.data ?? []).map((v) => v.voucher_id)
-                  if (confirm(`Delete ALL ${ids.length} voucher(s) matching this filter (class + month)? This cannot be undone.`)) {
-                    bulkDeleteMutation.mutate(ids)
-                  }
+                  const ok = await confirmAction({
+                    title: `Delete ALL ${ids.length} matching voucher(s)?`,
+                    message: 'Every voucher matching the current filter will be permanently removed. This cannot be undone.',
+                    confirmLabel: 'Delete All',
+                    destructive: true,
+                  })
+                  if (ok) bulkDeleteMutation.mutate(ids)
                 }}
               >
                 Delete All Matching ({filterMutation.data?.length ?? 0})
@@ -452,6 +475,7 @@ function VoucherLookup({
 function GenerateTab() {
   const { role } = useAuth()
   const isAdmin = role === 'Admin'
+  const confirmAction = useConfirm()
   const queryClient = useQueryClient()
   const { data: grades } = useQuery({ queryKey: ['grades'], queryFn: listGrades })
   const [studentId, setStudentId] = useState('')
@@ -501,7 +525,13 @@ function GenerateTab() {
         setBulkResult(`No vouchers found for ${selectedClasses.join(', ')} — ${bulkMonth}/${bulkYear}. Make sure the class and month above match what you used to generate them.`)
         return
       }
-      if (!confirm(`Delete ${matches.length} voucher(s) for ${selectedClasses.join(', ')} — ${bulkMonth}/${bulkYear}? This cannot be undone.`)) {
+      const ok = await confirmAction({
+        title: `Delete ${matches.length} voucher(s)?`,
+        message: `All vouchers for ${selectedClasses.join(', ')} — ${bulkMonth}/${bulkYear} will be permanently removed, including any with payments or discounts. This cannot be undone.`,
+        confirmLabel: 'Delete',
+        destructive: true,
+      })
+      if (!ok) {
         return
       }
       const result = await bulkDeleteVouchers(matches.map((m) => m.voucher_id))

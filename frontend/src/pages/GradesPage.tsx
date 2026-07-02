@@ -5,6 +5,7 @@ import {
 } from '@mui/material'
 import DeleteIcon from '@mui/icons-material/Delete'
 import { createGrade, deleteGrade, listGrades, updateGrade } from '../api/grades'
+import { useConfirm, useToast } from '../components/feedback'
 
 function apiErrorMessage(e: unknown): string {
   return String((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? e)
@@ -106,13 +107,18 @@ function GradeRow({
   gradeId, className, feeAmount, studentCount, onDelete,
 }: { gradeId: number; className: string; feeAmount: number; studentCount: number; onDelete: () => void }) {
   const queryClient = useQueryClient()
+  const toast = useToast()
+  const confirmAction = useConfirm()
   const [name, setName] = useState(className)
   const [fee, setFee] = useState(String(feeAmount))
 
   const saveMutation = useMutation({
     mutationFn: () => updateGrade(gradeId, name, Number(fee) || 0),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['grades'] }),
-    onError: (e) => alert(apiErrorMessage(e)),
+    onSuccess: () => {
+      toast('Class saved.')
+      queryClient.invalidateQueries({ queryKey: ['grades'] })
+    },
+    onError: (e) => toast(apiErrorMessage(e), 'error'),
   })
 
   return (
@@ -133,8 +139,15 @@ function GradeRow({
         <IconButton
           size="small"
           color="error"
-          onClick={() => {
-            if (window.confirm(`Delete class "${className}"?`)) onDelete()
+          aria-label={`Delete class ${className}`}
+          onClick={async () => {
+            const ok = await confirmAction({
+              title: `Delete class "${className}"?`,
+              message: 'A class can only be deleted when no students are enrolled in it.',
+              confirmLabel: 'Delete',
+              destructive: true,
+            })
+            if (ok) onDelete()
           }}
         >
           <DeleteIcon fontSize="small" />

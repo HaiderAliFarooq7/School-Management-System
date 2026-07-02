@@ -7,6 +7,7 @@ import {
 import { useAuth } from '../context/AuthContext'
 import { listGrades } from '../api/grades'
 import { deleteStudent, updateStudent, type Student } from '../api/students'
+import { useConfirm } from './feedback'
 
 interface Props {
   student: Student | null
@@ -16,6 +17,7 @@ interface Props {
 
 export function StudentEditDialog({ student, open, onClose }: Props) {
   const queryClient = useQueryClient()
+  const confirmAction = useConfirm()
   const { role } = useAuth()
   const { data: grades } = useQuery({ queryKey: ['grades'], queryFn: listGrades })
   const [form, setForm] = useState({
@@ -77,13 +79,16 @@ export function StudentEditDialog({ student, open, onClose }: Props) {
     onError: (e) => setDeleteError(String((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Could not delete this student.')),
   })
 
-  function handleDelete() {
+  async function handleDelete() {
     if (!student) return
-    const confirmed = confirm(
-      `Permanently delete ${student.name} (${student.registration_no})?\n\n` +
-        'This deletes the student and every record tied to them — fee vouchers, ' +
-        'extra charges, payment history, and attendance. This cannot be undone.',
-    )
+    const confirmed = await confirmAction({
+      title: `Permanently delete ${student.name}?`,
+      message:
+        `This deletes ${student.name} (${student.registration_no}) and every record tied to them — ` +
+        'fee vouchers, extra charges, payment history, and attendance. This cannot be undone.',
+      confirmLabel: 'Delete Student',
+      destructive: true,
+    })
     if (confirmed) deleteMutation.mutate()
   }
 

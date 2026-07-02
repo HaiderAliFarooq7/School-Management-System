@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Box, CircularProgress } from '@mui/material'
 import { AuthProvider } from './context/AuthContext'
 import { ErrorBoundary } from './components/ErrorBoundary'
+import { FeedbackProvider } from './components/feedback'
 import { ProtectedRoute } from './components/layout/ProtectedRoute'
 import { AppShell } from './components/layout/AppShell'
 import { AppThemeProvider } from './theme'
@@ -60,6 +61,7 @@ export default function App() {
   return (
     <AppThemeProvider>
       <ErrorBoundary>
+        <FeedbackProvider>
         <QueryClientProvider client={queryClient}>
           <BrowserRouter>
             <AuthProvider>
@@ -106,6 +108,7 @@ export default function App() {
             </AuthProvider>
           </BrowserRouter>
         </QueryClientProvider>
+        </FeedbackProvider>
       </ErrorBoundary>
     </AppThemeProvider>
   )
