@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -28,7 +28,7 @@ from app.schemas.student_import import (
     PreviewResponse,
 )
 from app.services import student_import_service as import_service
-from app.services.fee_status import aggregate_fee_status
+from app.services.fee_status import aggregate_fee_status, fee_summaries_for_students
 from app.schemas.fee_voucher import VoucherOut
 from app.schemas.extra_charge import ChargeOut
 
@@ -93,6 +93,20 @@ def _to_out(db: Session, student: Student, current_user: CurrentUser | None = No
     return out
 
 
+def _to_out_many(db: Session, students: list[Student], current_user: CurrentUser | None = None) -> list[StudentOut]:
+    """List variant of _to_out: two fee queries for the whole result set
+    instead of three per student."""
+    if current_user is not None and current_user.role_name == "Teacher":
+        return [_to_out(db, s, current_user) for s in students]
+    summaries = fee_summaries_for_students(db, [s.student_id for s in students])
+    outs = []
+    for s in students:
+        out = StudentOut.model_validate(s)
+        out.fee_status, out.total_pending = summaries[s.student_id]
+        outs.append(out)
+    return outs
+
+
 @router.get("", response_model=list[StudentOut])
 def list_students(
     search: str = "",
@@ -118,17 +132,20 @@ def list_students(
         query = query.where(Student.status == status_filter)
     query = query.order_by(Student.student_id.desc())
     students = db.execute(query).scalars().all()
-    return [_to_out(db, s, current_user) for s in students]
+    return _to_out_many(db, students, current_user)
 
 
 @router.get("/class-counts")
 def get_class_counts(db: Session = Depends(get_db)):
     """Active student count per class, in promotion order — used by the
     Promote Students screen to show how many students sit in each class."""
-    counts: dict[str, int] = {}
-    students = db.execute(select(Student.class_name).where(Student.status == "Active")).scalars().all()
-    for class_name in students:
-        counts[class_name] = counts.get(class_name, 0) + 1
+    counts = dict(
+        db.execute(
+            select(Student.class_name, func.count())
+            .where(Student.status == "Active")
+            .group_by(Student.class_name)
+        ).all()
+    )
     return [{"class_name": c, "count": counts.get(c, 0)} for c in CLASS_SEQUENCE]
 
 
@@ -353,18 +370,28 @@ def get_pending_fee_names(
     students = db.execute(
         select(Student).where(Student.class_name == class_name, Student.status == "Active")
     ).scalars().all()
+    student_ids = [s.student_id for s in students]
 
-    result = []
-    for s in students:
-        has_pending_voucher = db.execute(
-            select(FeeVoucher.voucher_id).where(FeeVoucher.student_id == s.student_id, FeeVoucher.status != "Paid").limit(1)
-        ).first()
-        has_pending_charge = db.execute(
-            select(ExtraCharge.charge_id).where(ExtraCharge.student_id == s.student_id, ExtraCharge.status != "Paid").limit(1)
-        ).first()
-        if has_pending_voucher or has_pending_charge:
-            result.append({"student_id": s.student_id, "name": s.name, "registration_no": s.registration_no})
-    return result
+    with_pending_vouchers = set(
+        db.execute(
+            select(FeeVoucher.student_id)
+            .where(FeeVoucher.student_id.in_(student_ids), FeeVoucher.status != "Paid")
+            .distinct()
+        ).scalars().all()
+    ) if student_ids else set()
+    with_pending_charges = set(
+        db.execute(
+            select(ExtraCharge.student_id)
+            .where(ExtraCharge.student_id.in_(student_ids), ExtraCharge.status != "Paid")
+            .distinct()
+        ).scalars().all()
+    ) if student_ids else set()
+
+    return [
+        {"student_id": s.student_id, "name": s.name, "registration_no": s.registration_no}
+        for s in students
+        if s.student_id in with_pending_vouchers or s.student_id in with_pending_charges
+    ]
 
 
 @router.get("/{student_id}", response_model=StudentOut)
@@ -490,7 +517,7 @@ def search_advanced(
         query = query.where(Student.dob <= params.dob_to)
     query = query.order_by(Student.student_id.desc())
     students = db.execute(query).scalars().all()
-    results = [_to_out(db, s) for s in students]
+    results = _to_out_many(db, students)
 
     if params.fee_status_filter:
         results = [s for s in results if s.fee_status == params.fee_status_filter]
