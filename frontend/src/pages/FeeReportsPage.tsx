@@ -3,7 +3,7 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 import { DataGrid, type GridColDef } from '@mui/x-data-grid'
 import {
   Alert, Box, Button, Card, CardContent, Checkbox, Chip, FormControlLabel, Grid, MenuItem, Select, Tab, Table,
-  TableBody, TableCell, TableHead, TableRow, Tabs, Typography,
+  TableBody, TableCell, TableContainer, TableHead, TableRow, Tabs, Typography,
 } from '@mui/material'
 import {
   PENDING_REPORT_COLUMNS, downloadPendingReportExcel, downloadPendingReportPdf, getFeeAnalytics, getPendingReport,
@@ -22,7 +22,7 @@ export function FeeReportsPage() {
       <Typography variant="h5" gutterBottom>
         Fee Reports
       </Typography>
-      <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 2 }}>
+      <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 2 }} variant="scrollable" scrollButtons="auto" allowScrollButtonsMobile>
         <Tab label="Pending Fee Report" />
         {isAdmin && <Tab label="Analytics" />}
       </Tabs>
@@ -83,7 +83,7 @@ function PendingReportTab() {
           value={selectedClasses}
           onChange={(e) => setSelectedClasses(e.target.value as unknown as string[])}
           displayEmpty
-          sx={{ minWidth: 200 }}
+          sx={{ minWidth: 200, width: { xs: '100%', sm: 'auto' } }}
           renderValue={(selected) => (selected as string[]).length ? (selected as string[]).join(', ') : 'All Classes'}
         >
           {grades?.map((g) => <MenuItem key={g.grade_id} value={g.class_name}>{g.class_name}</MenuItem>)}
@@ -114,7 +114,7 @@ function PendingReportTab() {
           />
         ))}
       </Box>
-      <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
+      <Box sx={{ display: 'flex', gap: 1, mb: 2, flexWrap: 'wrap' }}>
         <Button
           variant="outlined"
           onClick={() => downloadPendingReportPdf({ class_names: selectedClasses, status_filter: statusFilter, columns: selectedColumns })}
@@ -203,7 +203,8 @@ function AnalyticsTab() {
       </Grid>
 
       <Typography variant="h6" gutterBottom>Per-Class Breakdown</Typography>
-      <Table size="small" sx={{ maxWidth: 800, mb: 4 }}>
+      <TableContainer sx={{ maxWidth: 800, mb: 4 }}>
+        <Table size="small" sx={{ minWidth: 560 }}>
         <TableHead>
           <TableRow>
             <TableCell>Class</TableCell>
@@ -226,10 +227,12 @@ function AnalyticsTab() {
             </TableRow>
           ))}
         </TableBody>
-      </Table>
+        </Table>
+      </TableContainer>
 
       <Typography variant="h6" gutterBottom>Monthly Collection Trend</Typography>
-      <Table size="small" sx={{ maxWidth: 800 }}>
+      <TableContainer sx={{ maxWidth: 800 }}>
+        <Table size="small" sx={{ minWidth: 440 }}>
         <TableHead>
           <TableRow>
             <TableCell>Month</TableCell>
@@ -248,7 +251,8 @@ function AnalyticsTab() {
             </TableRow>
           ))}
         </TableBody>
-      </Table>
+        </Table>
+      </TableContainer>
     </Box>
   )
 }

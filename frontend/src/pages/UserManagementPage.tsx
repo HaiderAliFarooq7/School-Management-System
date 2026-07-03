@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, MenuItem, Select, Table, TableBody,
-  TableCell, TableHead, TableRow, TextField, Typography,
+  TableCell, TableContainer, TableHead, TableRow, TextField, Typography,
 } from '@mui/material'
 import {
   activateUser, createUser, deactivateUser, deleteUser, listUsers, updateUser, type User,
@@ -110,7 +110,8 @@ export function UserManagementPage() {
         </Button>
       </Box>
 
-      <Table size="small" sx={{ maxWidth: 950 }}>
+      <TableContainer sx={{ maxWidth: 950 }}>
+        <Table size="small" sx={{ minWidth: 680 }}>
         <TableHead>
           <TableRow>
             <TableCell>Username</TableCell>
@@ -165,7 +166,8 @@ export function UserManagementPage() {
             </TableRow>
           ))}
         </TableBody>
-      </Table>
+        </Table>
+      </TableContainer>
 
       <EditUserDialog
         user={editTarget}

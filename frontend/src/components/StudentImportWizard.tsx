@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Alert, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel,
   LinearProgress, MenuItem, Radio, RadioGroup, Select, Step, StepLabel, Stepper, Table, TableBody,
-  TableCell, TableHead, TableRow, Typography,
+  TableCell, TableHead, TableRow, Typography, useMediaQuery, useTheme,
 } from '@mui/material'
 import { DataGrid, type GridColDef } from '@mui/x-data-grid'
 import {
@@ -24,6 +24,10 @@ function apiErrorMessage(e: unknown, fallback: string): string {
 }
 
 export function StudentImportWizard({ open, onClose }: Props) {
+  const theme = useTheme()
+  // The wizard hosts a stepper and a preview DataGrid — on phones a
+  // full-screen dialog is the only comfortable way to use it.
+  const fullScreen = useMediaQuery(theme.breakpoints.down('sm'))
   const queryClient = useQueryClient()
   const confirmAction = useConfirm()
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -109,7 +113,7 @@ export function StudentImportWizard({ open, onClose }: Props) {
   const requiredFieldsMapped = Object.values(mapping).includes('name') && Object.values(mapping).includes('class_name')
 
   return (
-    <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
+    <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth fullScreen={fullScreen}>
       <DialogTitle>Import Students</DialogTitle>
       <DialogContent>
         <Stepper activeStep={step} sx={{ mb: 3 }} alternativeLabel>

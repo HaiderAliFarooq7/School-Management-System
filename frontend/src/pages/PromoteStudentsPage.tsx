@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import {
   Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, Table, TableBody, TableCell,
-  TableHead, TableRow, TextField, Typography,
+  TableContainer, TableHead, TableRow, TextField, Typography,
 } from '@mui/material'
 import { CLASS_SEQUENCE, getClassCounts, promoteAllStudents, type PromoteResult } from '../api/students'
 
@@ -72,7 +72,8 @@ export function PromoteStudentsPage() {
         </Alert>
       )}
 
-      <Table size="small" sx={{ maxWidth: 700, mb: 3 }}>
+      <TableContainer sx={{ maxWidth: 700, mb: 3 }}>
+        <Table size="small" sx={{ minWidth: 540 }}>
         <TableHead>
           <TableRow>
             <TableCell>Class</TableCell>
@@ -101,7 +102,8 @@ export function PromoteStudentsPage() {
             </TableRow>
           ))}
         </TableBody>
-      </Table>
+        </Table>
+      </TableContainer>
 
       <Button
         variant="contained"

@@ -35,7 +35,14 @@ export function FeeVouchersPage() {
       <Typography variant="h5" gutterBottom>
         Fee Vouchers
       </Typography>
-      <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 2 }}>
+      <Tabs
+        value={tab}
+        onChange={(_, v) => setTab(v)}
+        sx={{ mb: 2 }}
+        variant="scrollable"
+        scrollButtons="auto"
+        allowScrollButtonsMobile
+      >
         <Tab label="Find & Pay" />
         <Tab label="Generate Vouchers" />
         <Tab label="Print Challans" />
@@ -227,7 +234,7 @@ function FindAndPayTab() {
           value={selectedClasses}
           onChange={(e) => setSelectedClasses(e.target.value as unknown as string[])}
           displayEmpty
-          sx={{ minWidth: 200 }}
+          sx={{ minWidth: 200, width: { xs: '100%', sm: 'auto' } }}
           renderValue={(selected) => (selected as string[]).length ? (selected as string[]).join(', ') : 'All Classes'}
         >
           {grades?.map((g) => <MenuItem key={g.grade_id} value={g.class_name}>{g.class_name}</MenuItem>)}
@@ -245,7 +252,7 @@ function FindAndPayTab() {
           value={selectedStatuses}
           onChange={(e) => setSelectedStatuses(e.target.value as unknown as string[])}
           displayEmpty
-          sx={{ minWidth: 180 }}
+          sx={{ minWidth: 180, width: { xs: '100%', sm: 'auto' } }}
           renderValue={(selected) => (selected as string[]).length ? (selected as string[]).join(', ') : 'All Statuses'}
         >
           <MenuItem value="Unpaid">Unpaid</MenuItem>
@@ -439,13 +446,13 @@ function VoucherLookup({
         Same as the fee counter at school: a student hands over their printed voucher, and you look
         them up here to record a payment, give a discount, or see what else they owe.
       </Typography>
-      <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
+      <Box sx={{ display: 'flex', gap: 2, mb: 2, flexWrap: 'wrap', alignItems: 'center' }}>
         <TextField
           label="Voucher no / Name / Phone / CNIC"
           size="small"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          sx={{ width: 320 }}
+          sx={{ width: { xs: '100%', sm: 320 } }}
           onKeyDown={(e) => e.key === 'Enter' && mutation.mutate(query)}
         />
         <Button variant="contained" disabled={!query} onClick={() => mutation.mutate(query)}>
@@ -582,7 +589,7 @@ function GenerateTab() {
           value={selectedClasses}
           onChange={(e) => setSelectedClasses(e.target.value as unknown as string[])}
           displayEmpty
-          sx={{ minWidth: 220 }}
+          sx={{ minWidth: 220, width: { xs: '100%', sm: 'auto' } }}
           renderValue={(selected) => (selected as string[]).join(', ') || 'Select classes'}
         >
           {grades?.map((g) => <MenuItem key={g.grade_id} value={g.class_name}>{g.class_name}</MenuItem>)}
@@ -696,12 +703,12 @@ function PrintChallansTab() {
           value={selectedClasses}
           onChange={(e) => setSelectedClasses(e.target.value as unknown as string[])}
           displayEmpty
-          sx={{ minWidth: 220 }}
+          sx={{ minWidth: 220, width: { xs: '100%', sm: 'auto' } }}
           renderValue={(selected) => (selected as string[]).length ? (selected as string[]).join(', ') : 'All Classes'}
         >
           {grades?.map((g) => <MenuItem key={g.grade_id} value={g.class_name}>{g.class_name}</MenuItem>)}
         </Select>
-        <Select size="small" value={mode} onChange={(e) => setMode(e.target.value as '4up' | 'individual')} sx={{ width: 220 }}>
+        <Select size="small" value={mode} onChange={(e) => setMode(e.target.value as '4up' | 'individual')} sx={{ width: { xs: '100%', sm: 220 } }}>
           <MenuItem value="4up">4 Challans per A4 Sheet</MenuItem>
           <MenuItem value="individual">1 Challan per Page</MenuItem>
         </Select>
@@ -719,13 +726,13 @@ function PrintChallansTab() {
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
         Search for a student and print just their challan, using the same note above.
       </Typography>
-      <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2 }}>
+      <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2, flexWrap: 'wrap' }}>
         <TextField
           label="Search student (name or reg no)"
           size="small"
           value={singleSearch}
           onChange={(e) => setSingleSearch(e.target.value)}
-          sx={{ width: 260 }}
+          sx={{ width: { xs: '100%', sm: 260 } }}
         />
         <Button variant="outlined" onClick={() => singleSearchMutation.mutate()} disabled={!singleSearch}>
           Search
@@ -733,7 +740,7 @@ function PrintChallansTab() {
       </Box>
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, maxWidth: 600 }}>
         {singleSearchMutation.data?.map((s) => (
-          <Box key={s.student_id} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', border: '1px solid #ddd', borderRadius: 1, px: 2, py: 1 }}>
+          <Box key={s.student_id} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, flexWrap: 'wrap', border: '1px solid', borderColor: 'divider', borderRadius: 1, px: 2, py: 1 }}>
             <Typography variant="body2">
               {s.registration_no} — {s.name} ({s.class_name})
             </Typography>
