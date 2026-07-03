@@ -8,6 +8,7 @@ import {
   activateUser, createUser, deactivateUser, deleteUser, listUsers, updateUser, type User,
 } from '../api/users'
 import { listGrades } from '../api/grades'
+import { useConfirm, useToast } from '../components/feedback'
 
 const ROLES = ['Admin', 'Accountant', 'Teacher']
 
@@ -17,6 +18,8 @@ function apiErrorMessage(e: unknown): string {
 
 export function UserManagementPage() {
   const queryClient = useQueryClient()
+  const toast = useToast()
+  const confirmAction = useConfirm()
   const { data: users } = useQuery({ queryKey: ['users'], queryFn: listUsers })
   const { data: grades } = useQuery({ queryKey: ['grades'], queryFn: listGrades })
   const [editTarget, setEditTarget] = useState<User | null>(null)
@@ -40,20 +43,29 @@ export function UserManagementPage() {
 
   const deactivateMutation = useMutation({
     mutationFn: (userId: number) => deactivateUser(userId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['users'] }),
-    onError: (e) => alert(apiErrorMessage(e)),
+    onSuccess: () => {
+      toast('User deactivated.')
+      queryClient.invalidateQueries({ queryKey: ['users'] })
+    },
+    onError: (e) => toast(apiErrorMessage(e), 'error'),
   })
 
   const activateMutation = useMutation({
     mutationFn: (userId: number) => activateUser(userId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['users'] }),
-    onError: (e) => alert(apiErrorMessage(e)),
+    onSuccess: () => {
+      toast('User activated.')
+      queryClient.invalidateQueries({ queryKey: ['users'] })
+    },
+    onError: (e) => toast(apiErrorMessage(e), 'error'),
   })
 
   const deleteMutation = useMutation({
     mutationFn: (userId: number) => deleteUser(userId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['users'] }),
-    onError: (e) => alert(apiErrorMessage(e)),
+    onSuccess: () => {
+      toast('User deleted.')
+      queryClient.invalidateQueries({ queryKey: ['users'] })
+    },
+    onError: (e) => toast(apiErrorMessage(e), 'error'),
   })
 
   return (
@@ -72,7 +84,7 @@ export function UserManagementPage() {
           type="password"
           value={form.password}
           onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
-          helperText="At least 6 characters"
+          helperText="At least 8 characters"
         />
         <Select size="small" value={form.role_name} onChange={(e) => setForm((f) => ({ ...f, role_name: e.target.value }))} sx={{ width: 140 }}>
           {ROLES.map((r) => <MenuItem key={r} value={r}>{r}</MenuItem>)}
@@ -91,7 +103,7 @@ export function UserManagementPage() {
         )}
         <Button
           variant="contained"
-          disabled={!form.username || !form.full_name || form.password.length < 6}
+          disabled={!form.username || !form.full_name || form.password.length < 8}
           onClick={() => createMutation.mutate()}
         >
           Create User
@@ -136,10 +148,14 @@ export function UserManagementPage() {
                   <Button
                     size="small"
                     color="error"
-                    onClick={() => {
-                      if (window.confirm(`Permanently delete user "${u.username}"? This cannot be undone.`)) {
-                        deleteMutation.mutate(u.user_id)
-                      }
+                    onClick={async () => {
+                      const ok = await confirmAction({
+                        title: `Delete user "${u.username}"?`,
+                        message: 'The account will be permanently removed. Attendance they marked is kept, with "marked by" cleared. This cannot be undone.',
+                        confirmLabel: 'Delete',
+                        destructive: true,
+                      })
+                      if (ok) deleteMutation.mutate(u.user_id)
                     }}
                   >
                     Delete
@@ -223,6 +239,8 @@ function EditUserDialog({
             type="password"
             value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}
+            helperText={newPassword ? 'At least 8 characters' : undefined}
+            error={!!newPassword && newPassword.length < 8}
           />
         </Box>
       </DialogContent>

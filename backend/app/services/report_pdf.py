@@ -1,4 +1,4 @@
-import os
+import io
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4, landscape
@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.school import School
+from app.services.logo_store import logo_content
 
 
 def _get_school(db: Session) -> School:
@@ -36,9 +37,10 @@ def generate_table_report_pdf(
     styles = getSampleStyleSheet()
     elements = []
 
-    if school.logo_path and os.path.exists(school.logo_path):
+    logo = logo_content(school)
+    if logo:
         try:
-            elements.append(Image(school.logo_path, width=20 * mm, height=20 * mm))
+            elements.append(Image(io.BytesIO(logo[0]), width=20 * mm, height=20 * mm))
         except Exception:
             pass
 

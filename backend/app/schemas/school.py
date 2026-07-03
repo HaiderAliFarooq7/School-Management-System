@@ -18,6 +18,8 @@ class SchoolUpdate(BaseModel):
 
 class SchoolOut(SchoolUpdate):
     school_id: int
-    logo_path: str | None = None
+    # True when a logo exists (in the database, or a legacy on-disk file).
+    # The bytes themselves are never serialized here — fetch GET /school/logo.
+    has_logo: bool = False
 
     model_config = ConfigDict(from_attributes=True)

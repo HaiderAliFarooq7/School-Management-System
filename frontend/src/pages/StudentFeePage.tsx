@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams } from 'react-router-dom'
 import {
-  Box, Button, Card, CardContent, Chip, Divider, Grid, MenuItem, Select, Table, TableBody,
+  Box, Button, Card, CardContent, Chip, Divider, Grid, MenuItem, Select, Skeleton, Table, TableBody,
   TableCell, TableHead, TableRow, TextField, Typography,
 } from '@mui/material'
 import { getBalanceSheet } from '../api/feeReports'
@@ -13,7 +13,9 @@ import { addCharge, applyChargeDiscount, deleteCharge, editCharge, payCharge } f
 import { listGrades } from '../api/grades'
 import { DiscountDialog } from '../components/DiscountDialog'
 import { EditFigureDialog } from '../components/EditFigureDialog'
+import { useConfirm, useToast } from '../components/feedback'
 import { useAuth } from '../context/AuthContext'
+import { useDebouncedValue } from '../hooks/useDebouncedValue'
 
 const STATUS_COLOR: Record<string, 'success' | 'warning' | 'error'> = {
   Paid: 'success', Partial: 'warning', Unpaid: 'error', Open: 'warning',
@@ -34,10 +36,11 @@ export function StudentFeePage() {
 function StudentSearchPicker() {
   const navigate = useNavigate()
   const [query, setQuery] = useState('')
+  const debouncedQuery = useDebouncedValue(query)
   const { data: results, isFetching } = useQuery({
-    queryKey: ['student-fee-search', query],
-    queryFn: () => listStudents({ search: query }),
-    enabled: query.length > 0,
+    queryKey: ['student-fee-search', debouncedQuery],
+    queryFn: () => listStudents({ search: debouncedQuery }),
+    enabled: debouncedQuery.length > 0,
   })
 
   return (
@@ -83,6 +86,8 @@ function StudentLedger({ studentId }: { studentId: number }) {
   const queryClient = useQueryClient()
   const { role } = useAuth()
   const isAdmin = role === 'Admin'
+  const toast = useToast()
+  const confirmAction = useConfirm()
   const { data: student } = useQuery({ queryKey: ['student', studentId], queryFn: () => getStudent(studentId) })
   const { data: sheet } = useQuery({ queryKey: ['balance-sheet', studentId], queryFn: () => getBalanceSheet(studentId) })
   const { data: grades } = useQuery({ queryKey: ['grades'], queryFn: listGrades })
@@ -100,13 +105,13 @@ function StudentLedger({ studentId }: { studentId: number }) {
 
   const payVoucherMutation = useMutation({
     mutationFn: ({ voucherId, amount }: { voucherId: number; amount: number }) => payVoucher(voucherId, amount),
-    onSuccess: refresh,
-    onError: (e) => alert(apiErrorMessage(e)),
+    onSuccess: () => { toast('Payment recorded.'); refresh() },
+    onError: (e) => toast(apiErrorMessage(e), 'error'),
   })
   const payChargeMutation = useMutation({
     mutationFn: ({ chargeId, amount }: { chargeId: number; amount: number }) => payCharge(chargeId, amount),
-    onSuccess: refresh,
-    onError: (e) => alert(apiErrorMessage(e)),
+    onSuccess: () => { toast('Payment recorded.'); refresh() },
+    onError: (e) => toast(apiErrorMessage(e), 'error'),
   })
   const voucherDiscountMutation = useMutation({
     mutationFn: ({ voucherId, amount, reason }: { voucherId: number; amount: number; reason: string }) =>
@@ -122,13 +127,13 @@ function StudentLedger({ studentId }: { studentId: number }) {
   })
   const deleteVoucherMutation = useMutation({
     mutationFn: (voucherId: number) => deleteVoucher(voucherId),
-    onSuccess: refresh,
-    onError: (e) => alert(apiErrorMessage(e)),
+    onSuccess: () => { toast('Voucher deleted.'); refresh() },
+    onError: (e) => toast(apiErrorMessage(e), 'error'),
   })
   const deleteChargeMutation = useMutation({
     mutationFn: (chargeId: number) => deleteCharge(chargeId),
-    onSuccess: refresh,
-    onError: (e) => alert(apiErrorMessage(e)),
+    onSuccess: () => { toast('Charge deleted.'); refresh() },
+    onError: (e) => toast(apiErrorMessage(e), 'error'),
   })
   const editVoucherMutation = useMutation({
     mutationFn: ({ voucherId, values }: { voucherId: number; values: { total_amount: number; paid_amount: number; discount_amount: number; discount_reason: string | null } }) =>
@@ -151,19 +156,34 @@ function StudentLedger({ studentId }: { studentId: number }) {
   const [genAmount, setGenAmount] = useState('')
   const generateMutation = useMutation({
     mutationFn: () => generateVoucher(studentId, genYear, genMonth, Number(genAmount) || student?.default_fee || 0),
-    onSuccess: () => { refresh(); setGenAmount('') },
-    onError: (e) => alert(apiErrorMessage(e)),
+    onSuccess: () => { toast('Voucher generated.'); refresh(); setGenAmount('') },
+    onError: (e) => toast(apiErrorMessage(e), 'error'),
   })
 
   const [chargeDesc, setChargeDesc] = useState('')
   const [chargeAmount, setChargeAmount] = useState('')
   const addChargeMutation = useMutation({
     mutationFn: () => addCharge(studentId, chargeDesc, Number(chargeAmount) || 0),
-    onSuccess: () => { refresh(); setChargeDesc(''); setChargeAmount('') },
-    onError: (e) => alert(apiErrorMessage(e)),
+    onSuccess: () => { toast('Charge added.'); refresh(); setChargeDesc(''); setChargeAmount('') },
+    onError: (e) => toast(apiErrorMessage(e), 'error'),
   })
 
-  if (!student || !sheet) return <Typography>Loading...</Typography>
+  if (!student || !sheet) {
+    return (
+      <Box>
+        <Skeleton width={280} height={44} />
+        <Skeleton width={420} sx={{ mb: 2 }} />
+        <Grid container spacing={2}>
+          {[0, 1, 2].map((i) => (
+            <Grid key={i} size={{ xs: 12, sm: 4 }}>
+              <Skeleton variant="rounded" height={96} />
+            </Grid>
+          ))}
+        </Grid>
+        <Skeleton variant="rounded" height={240} sx={{ mt: 3 }} />
+      </Box>
+    )
+  }
 
   const defaultGenAmount = grades?.find((g) => g.class_name === student.class_name)?.fee_amount ?? 0
 
@@ -272,7 +292,15 @@ function StudentLedger({ studentId }: { studentId: number }) {
                         <Button
                           size="small"
                           color="error"
-                          onClick={() => { if (confirm(`Delete the ${v.fee_month} voucher?`)) deleteVoucherMutation.mutate(v.voucher_id) }}
+                          onClick={async () => {
+                            const ok = await confirmAction({
+                              title: `Delete the ${v.fee_month} voucher?`,
+                              message: 'The voucher and its recorded figures will be permanently removed.',
+                              confirmLabel: 'Delete',
+                              destructive: true,
+                            })
+                            if (ok) deleteVoucherMutation.mutate(v.voucher_id)
+                          }}
                         >
                           Delete
                         </Button>
@@ -357,7 +385,15 @@ function StudentLedger({ studentId }: { studentId: number }) {
                         <Button
                           size="small"
                           color="error"
-                          onClick={() => { if (confirm(`Delete "${c.description}"?`)) deleteChargeMutation.mutate(c.charge_id) }}
+                          onClick={async () => {
+                            const ok = await confirmAction({
+                              title: `Delete "${c.description}"?`,
+                              message: 'The charge and its recorded figures will be permanently removed.',
+                              confirmLabel: 'Delete',
+                              destructive: true,
+                            })
+                            if (ok) deleteChargeMutation.mutate(c.charge_id)
+                          }}
                         >
                           Delete
                         </Button>

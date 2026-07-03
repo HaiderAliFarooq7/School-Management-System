@@ -26,15 +26,35 @@ def mark_attendance(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_current_user),
 ):
-    results = []
-    for entry in payload.entries:
-        existing = db.execute(
+    # Teachers can only ever mark their own assigned class, and only students
+    # who actually belong to that class — otherwise a Teacher token could
+    # write attendance for any student in the school.
+    scope_class_filter(current_user, payload.class_name)
+    class_student_ids = set(
+        db.execute(
+            select(Student.student_id).where(Student.class_name == payload.class_name)
+        ).scalars().all()
+    )
+    outside_class = [e.student_id for e in payload.entries if e.student_id not in class_student_ids]
+    if outside_class:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            f"{len(outside_class)} student(s) in this request are not enrolled in {payload.class_name}.",
+        )
+    existing_by_student = {
+        r.student_id: r
+        for r in db.execute(
             select(AttendanceRecord).where(
-                AttendanceRecord.student_id == entry.student_id,
+                AttendanceRecord.student_id.in_([e.student_id for e in payload.entries]),
                 AttendanceRecord.attendance_date == payload.attendance_date,
                 AttendanceRecord.period_name == payload.period_name,
             )
-        ).scalar_one_or_none()
+        ).scalars().all()
+    } if payload.entries else {}
+
+    results = []
+    for entry in payload.entries:
+        existing = existing_by_student.get(entry.student_id)
         if existing:
             existing.status = entry.status
             existing.remarks = entry.remarks
@@ -64,6 +84,7 @@ def get_attendance_for_class_date(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_current_user),
 ):
+    class_name = scope_class_filter(current_user, class_name)
     return db.execute(
         select(AttendanceRecord).where(
             AttendanceRecord.class_name == class_name,
@@ -81,24 +102,33 @@ def get_attendance_summary(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_current_user),
 ):
+    class_name = scope_class_filter(current_user, class_name)
     students = db.execute(
         select(Student).where(Student.class_name == class_name, Student.status == "Active")
     ).scalars().all()
 
-    rows = []
-    for s in students:
-        records = db.execute(
-            select(AttendanceRecord.status).where(
-                AttendanceRecord.student_id == s.student_id,
+    # Status counts for every student in the class, in one grouped query.
+    counts: dict[int, dict[str, int]] = {}
+    if students:
+        for sid, record_status, n in db.execute(
+            select(AttendanceRecord.student_id, AttendanceRecord.status, func.count())
+            .where(
+                AttendanceRecord.student_id.in_([s.student_id for s in students]),
                 AttendanceRecord.attendance_date >= date_from,
                 AttendanceRecord.attendance_date <= date_to,
             )
-        ).scalars().all()
-        present = sum(1 for r in records if r == "Present")
-        absent = sum(1 for r in records if r == "Absent")
-        late = sum(1 for r in records if r == "Late")
-        leave = sum(1 for r in records if r == "Leave")
-        total = len(records)
+            .group_by(AttendanceRecord.student_id, AttendanceRecord.status)
+        ).all():
+            counts.setdefault(sid, {})[record_status] = n
+
+    rows = []
+    for s in students:
+        by_status = counts.get(s.student_id, {})
+        present = by_status.get("Present", 0)
+        absent = by_status.get("Absent", 0)
+        late = by_status.get("Late", 0)
+        leave = by_status.get("Leave", 0)
+        total = sum(by_status.values())
         rows.append(
             AttendanceSummaryRow(
                 student_id=s.student_id,
@@ -124,18 +154,27 @@ def get_attendance_daily_status(attendance_date: date_type | None = None, db: Se
     target_date = attendance_date or date_type.today()
     grades = db.execute(select(Grade).order_by(Grade.class_name)).scalars().all()
 
+    active_by_class = dict(
+        db.execute(
+            select(Student.class_name, func.count(Student.student_id))
+            .where(Student.status == "Active")
+            .group_by(Student.class_name)
+        ).all()
+    )
+    marked_by_class = dict(
+        db.execute(
+            select(AttendanceRecord.class_name, func.count(func.distinct(AttendanceRecord.student_id)))
+            .where(AttendanceRecord.attendance_date == target_date)
+            .group_by(AttendanceRecord.class_name)
+        ).all()
+    )
+
     rows = []
     for g in grades:
-        total_active = db.execute(
-            select(func.count(Student.student_id)).where(Student.class_name == g.class_name, Student.status == "Active")
-        ).scalar_one()
+        total_active = active_by_class.get(g.class_name, 0)
         if total_active == 0:
             continue
-        marked_count = db.execute(
-            select(func.count(func.distinct(AttendanceRecord.student_id))).where(
-                AttendanceRecord.class_name == g.class_name, AttendanceRecord.attendance_date == target_date,
-            )
-        ).scalar_one()
+        marked_count = marked_by_class.get(g.class_name, 0)
         rows.append(
             AttendanceDailyStatusRow(
                 class_name=g.class_name,
@@ -189,6 +228,7 @@ def get_student_attendance_history(
     student = db.get(Student, student_id)
     if student is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Student not found")
+    scope_class_filter(current_user, student.class_name)
     return db.execute(
         select(AttendanceRecord)
         .where(

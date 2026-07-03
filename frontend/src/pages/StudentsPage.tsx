@@ -11,6 +11,7 @@ import { exportStudents } from '../api/studentImport'
 import { StudentEditDialog } from '../components/StudentEditDialog'
 import { StudentImportWizard } from '../components/StudentImportWizard'
 import { useAuth } from '../context/AuthContext'
+import { useDebouncedValue } from '../hooks/useDebouncedValue'
 
 export function StudentsPage() {
   const navigate = useNavigate()
@@ -25,10 +26,11 @@ export function StudentsPage() {
   const [exportAnchor, setExportAnchor] = useState<null | HTMLElement>(null)
   const [exportFormat, setExportFormat] = useState<'xlsx' | 'csv'>('xlsx')
 
+  const debouncedSearch = useDebouncedValue(search)
   const { data: grades } = useQuery({ queryKey: ['grades'], queryFn: listGrades })
   const { data: students, isLoading, isError } = useQuery({
-    queryKey: ['students', search, classFilter, statusFilter],
-    queryFn: () => listStudents({ search, class_filter: classFilter, status_filter: statusFilter }),
+    queryKey: ['students', debouncedSearch, classFilter, statusFilter],
+    queryFn: () => listStudents({ search: debouncedSearch, class_filter: classFilter, status_filter: statusFilter }),
   })
 
   const selectedIds = Array.from(selectionModel as Iterable<number>)
@@ -91,10 +93,10 @@ export function StudentsPage() {
 
   return (
     <Box>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 1 }}>
         <Typography variant="h5">Students</Typography>
         {isAdmin && (
-          <Box sx={{ display: 'flex', gap: 1 }}>
+          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
             <Button variant="outlined" onClick={() => setImportOpen(true)}>Import Students</Button>
             <Select size="small" value={exportFormat} onChange={(e) => setExportFormat(e.target.value as 'xlsx' | 'csv')} sx={{ width: 90 }}>
               <MenuItem value="xlsx">.xlsx</MenuItem>
@@ -115,13 +117,13 @@ export function StudentsPage() {
         )}
       </Box>
       {isError && <Typography color="error" sx={{ mb: 2 }}>Could not load students. Please try again.</Typography>}
-      <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
+      <Box sx={{ display: 'flex', gap: 2, mb: 2, flexWrap: 'wrap' }}>
         <TextField
           label="Search name / reg no / CNIC"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           size="small"
-          sx={{ width: 280 }}
+          sx={{ width: { xs: '100%', sm: 280 } }}
         />
         <Select size="small" value={classFilter} onChange={(e) => setClassFilter(e.target.value)} displayEmpty sx={{ width: 160 }}>
           <MenuItem value="">All Classes</MenuItem>

@@ -5,7 +5,7 @@ export interface School {
   name: string
   address: string
   phone: string
-  logo_path: string | null
+  has_logo: boolean
   bank_name: string
   account_title: string
   account_number: string

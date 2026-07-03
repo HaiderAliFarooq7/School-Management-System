@@ -1,5 +1,45 @@
 # Changelog
 
+## [Unreleased] — Enterprise Hardening Pass (Phase 4)
+
+Full-stack audit-driven pass (see `AUDIT_REPORT.md`): security fixes, N+1 query elimination, a responsive/dark-mode UI foundation, and consistent in-app feedback. No business rules changed.
+
+### Fixed — uploaded school logo disappearing in production (user-reported)
+
+- **Root cause**: the logo was saved to `DATA_DIR` (default `/tmp/sms`) on the Render instance's disk, which is ephemeral — wiped on every restart, redeploy, and free-tier idle spin-down. Local setups never showed the bug because a local disk persists.
+- **Fix**: the logo now lives in the database (`school.logo_data`/`logo_mime`, migration `e5f6a7b8c9d0`) — Neon is the only durable storage in this deployment. Upload validates the bytes really decode as an image; `GET /api/school/logo` serves from the DB with `Cache-Control: no-cache`; voucher/report PDFs draw the logo from bytes instead of a disk path.
+- **Self-healing**: on startup, a legacy on-disk logo is imported into the DB if the file still exists; otherwise the bundled default is seeded. Re-upload your real logo once after deploying and it will persist permanently. The logo committed to the repo as a workaround still works as the first-boot default but is no longer needed for persistence.
+
+### Security
+
+- **Teacher scoping enforced across the attendance API** — previously a Teacher token could read or write attendance for *any* class or student (`POST /mark`, `GET /api/attendance`, `GET /summary`, `GET /student/{id}`). All now pass through `scope_class_filter`, and `/mark` additionally rejects student IDs not enrolled in the target class.
+- **Login rate limiting** (`app/rate_limit.py`): sliding 15-minute window, 5 failed attempts per (IP, username) and 20 per IP, `429` + `Retry-After`, failed/limited attempts logged with source IP. In-memory by design (single-instance Render deployment).
+- **Security headers middleware**: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, `Permissions-Policy`, HSTS behind Render's TLS proxy, `Content-Security-Policy: default-src 'none'` on `/api/*`, `Cache-Control: no-store` on `/api/auth/*`. Plus `GZipMiddleware` for response compression.
+- **Startup now refuses the default `JWT_SECRET` placeholder** (previously only a warning) — a forgeable signing key means anyone can mint an Admin token. `JWT_SECRET` was already documented as required in DEPLOYMENT.md.
+- **Password minimum raised 6 → 8** on user create/update, admin reset, and self change-password (backend schemas + frontend hints).
+- `GET /api/school` now requires authentication (`/api/school/logo` stays public — it's used in `<img src>`).
+- Payment endpoints (`pay` on vouchers and charges) take a `SELECT ... FOR UPDATE` row lock so concurrent payments can't overshoot the balance check.
+- Registration-number allocation retries on unique-constraint collision instead of surfacing a 500 when two admissions race.
+
+### Performance
+
+- **N+1 queries eliminated** — `fee_summaries_for_students()` computes fee status + pending for any roster in 2 queries (students list/advanced search were 3 queries *per student*); voucher search/filter, bulk-generate, attendance mark/summary/daily-status, pending fee report, pending-fee-names, and class-counts all batched similarly.
+- Migration `d4e5f6a7b8c9` adds hot-path indexes: `extra_charge(student_id)`, `extra_charge(status)`, `student(class_name)`, `student(status)`, `fee_voucher(status)`, `payment_history(target_type, target_id)`, `attendance_record(class_name, attendance_date)`. Run `alembic upgrade head` on deploy (the app works without them; they're pure speed-ups).
+- **Route-level code splitting** — every page behind login is lazy-loaded; the DataGrid (368 kB) and dashboard-charts (202 kB) chunks now download only for screens that use them. React Query tuned (30 s `staleTime`, 1 retry, no refetch-on-focus). Search inputs debounced (350 ms) instead of one request per keystroke.
+
+### UI / UX
+
+- **Responsive app shell**: temporary overlay drawer on phones/small tablets (closes after navigating), persistent collapsible sidebar on desktop; `aria-label`s on all icon-only controls; role chip in the top bar; responsive content padding with overflow containment.
+- **Dark mode**: full light/dark theme, user-toggleable from the top bar, persisted, defaults to the OS preference. Professional theme (system font stack, outlined cards, no all-caps buttons, softer surfaces).
+- **All 31 native `alert()`/`confirm()` calls replaced** with a themed Snackbar toast system and a promise-based confirmation dialog (destructive variant highlights risk and focuses Cancel). Payments/deletes/generation now give success feedback.
+- Loading skeletons on Dashboard stats/analytics and the Student Fee ledger; login gets a progress state, show/hide password toggle, and autocomplete attributes; app-level ErrorBoundary with error IDs; 404 page; real `<title>`/description/theme-color (was "frontend").
+
+### Verified
+
+- `pytest -q` — 15/15 passing against the configured database with the new code.
+- `npm run build` — zero TypeScript errors; `oxlint` — no new warnings.
+- Browser-verified via local preview: login (light/dark), desktop shell, mobile drawer open/close-on-navigate at 375 px, 404 page, dark-mode toggle, Students page graceful error/empty states.
+
 ## [Unreleased] — Production-Only Conversion (Phase 3)
 
 Converted the application to run exclusively in production: GitHub → Render (backend) → Neon (PostgreSQL) → Vercel (frontend). The app no longer has a supported local-dev runtime; all local-development fallbacks were removed.

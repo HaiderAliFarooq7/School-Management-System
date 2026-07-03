@@ -10,6 +10,7 @@ import {
   analyzeImportFile, executeImport, previewImport,
   type AnalyzeResponse, type ExecuteResult, type ImportMode, type PreviewResponse, type PreviewRow,
 } from '../api/studentImport'
+import { useConfirm } from './feedback'
 
 interface Props {
   open: boolean
@@ -24,6 +25,7 @@ function apiErrorMessage(e: unknown, fallback: string): string {
 
 export function StudentImportWizard({ open, onClose }: Props) {
   const queryClient = useQueryClient()
+  const confirmAction = useConfirm()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [step, setStep] = useState(0)
   const [error, setError] = useState<string | null>(null)
@@ -319,11 +321,17 @@ export function StudentImportWizard({ open, onClose }: Props) {
             variant="contained"
             color={importMode === 'delete_all' ? 'error' : 'primary'}
             disabled={executeMutation.isPending || preview?.valid_rows === 0}
-            onClick={() => {
-              const msg = importMode === 'delete_all'
-                ? `This will permanently delete ALL existing students and their records, then import ${preview?.valid_rows} student(s). This cannot be undone. Continue?`
-                : `Import ${preview?.valid_rows} valid student(s)?`
-              if (confirm(msg)) executeMutation.mutate()
+            onClick={async () => {
+              const destructive = importMode === 'delete_all'
+              const ok = await confirmAction({
+                title: destructive ? 'Delete everything and import?' : 'Run import?',
+                message: destructive
+                  ? `This will permanently delete ALL existing students and their records, then import ${preview?.valid_rows} student(s). This cannot be undone.`
+                  : `Import ${preview?.valid_rows} valid student(s)?`,
+                confirmLabel: 'Import',
+                destructive,
+              })
+              if (ok) executeMutation.mutate()
             }}
           >
             {executeMutation.isPending ? 'Importing…' : 'Import'}

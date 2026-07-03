@@ -1,5 +1,17 @@
 import { useState } from 'react'
-import { Box, Button, Paper, TextField, Typography, Alert } from '@mui/material'
+import {
+  Alert,
+  Box,
+  Button,
+  CircularProgress,
+  IconButton,
+  InputAdornment,
+  Paper,
+  TextField,
+  Typography,
+} from '@mui/material'
+import Visibility from '@mui/icons-material/Visibility'
+import VisibilityOff from '@mui/icons-material/VisibilityOff'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
@@ -19,18 +31,23 @@ function loginErrorMessage(err: unknown): string {
 export function LoginPage() {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [submitting, setSubmitting] = useState(false)
   const { login } = useAuth()
   const navigate = useNavigate()
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
+    setSubmitting(true)
     try {
       const role = await login(username, password)
       navigate(role === 'Teacher' ? '/attendance' : '/')
     } catch (err) {
       setError(loginErrorMessage(err))
+    } finally {
+      setSubmitting(false)
     }
   }
 
@@ -38,14 +55,15 @@ export function LoginPage() {
     <Box
       sx={{
         display: 'flex',
-        height: '100vh',
+        minHeight: '100dvh',
         alignItems: 'center',
         justifyContent: 'center',
-        bgcolor: 'grey.100',
+        bgcolor: 'background.default',
+        p: 2,
       }}
     >
-      <Paper sx={{ p: 4, width: 360 }} elevation={3}>
-        <Typography variant="h5" gutterBottom>
+      <Paper sx={{ p: { xs: 3, sm: 4 }, width: '100%', maxWidth: 380 }} elevation={3}>
+        <Typography variant="h5" component="h1" gutterBottom>
           School Management System
         </Typography>
         <Typography variant="body2" color="text.secondary" gutterBottom>
@@ -60,17 +78,42 @@ export function LoginPage() {
             onChange={(e) => setUsername(e.target.value)}
             margin="normal"
             autoFocus
+            autoComplete="username"
           />
           <TextField
             fullWidth
             label="Password"
-            type="password"
+            type={showPassword ? 'text' : 'password'}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             margin="normal"
+            autoComplete="current-password"
+            slotProps={{
+              input: {
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <IconButton
+                      aria-label={showPassword ? 'Hide password' : 'Show password'}
+                      onClick={() => setShowPassword((v) => !v)}
+                      edge="end"
+                    >
+                      {showPassword ? <VisibilityOff /> : <Visibility />}
+                    </IconButton>
+                  </InputAdornment>
+                ),
+              },
+            }}
           />
-          <Button fullWidth variant="contained" type="submit" sx={{ mt: 2 }}>
-            Log In
+          <Button
+            fullWidth
+            variant="contained"
+            type="submit"
+            size="large"
+            disabled={submitting || !username || !password}
+            startIcon={submitting ? <CircularProgress size={18} color="inherit" /> : undefined}
+            sx={{ mt: 2 }}
+          >
+            {submitting ? 'Signing in…' : 'Log In'}
           </Button>
         </Box>
       </Paper>

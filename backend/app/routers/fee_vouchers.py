@@ -3,7 +3,7 @@ from datetime import date, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
@@ -137,21 +137,35 @@ def search_vouchers(query: str, db: Session = Depends(get_db)):
         .limit(100)
     ).all()
 
+    # Everything each matched student still owes, fetched once for the whole
+    # result set (2 queries) instead of 2 queries per row.
+    student_ids = list({student.student_id for _, student in rows})
+    voucher_pending_by_student: dict[int, float] = {}
+    voucher_pending_by_id: dict[int, float] = {}
+    if student_ids:
+        for vid, sid, total, paid, discount in db.execute(
+            select(
+                FeeVoucher.voucher_id, FeeVoucher.student_id,
+                FeeVoucher.total_amount, FeeVoucher.paid_amount, FeeVoucher.discount_amount,
+            ).where(FeeVoucher.student_id.in_(student_ids), FeeVoucher.status != "Paid")
+        ).all():
+            pending = max(float(total) - float(paid) - float(discount), 0)
+            voucher_pending_by_id[vid] = pending
+            voucher_pending_by_student[sid] = voucher_pending_by_student.get(sid, 0) + pending
+    charges_pending_by_student = dict(
+        db.execute(
+            select(ExtraCharge.student_id, func.coalesce(func.sum(ExtraCharge.remaining_amount), 0))
+            .where(ExtraCharge.student_id.in_(student_ids), ExtraCharge.status != "Paid")
+            .group_by(ExtraCharge.student_id)
+        ).all()
+    ) if student_ids else {}
+
     results = []
     for voucher, student in rows:
-        other_pending = db.execute(
-            select(FeeVoucher.total_amount, FeeVoucher.paid_amount, FeeVoucher.discount_amount).where(
-                FeeVoucher.student_id == student.student_id, FeeVoucher.voucher_id != voucher.voucher_id,
-                FeeVoucher.status != "Paid",
-            )
-        ).all()
-        charges_pending = db.execute(
-            select(ExtraCharge.remaining_amount).where(
-                ExtraCharge.student_id == student.student_id, ExtraCharge.status != "Paid"
-            )
-        ).scalars().all()
-        other_total = sum(max(float(t) - float(p) - float(d), 0) for t, p, d in other_pending) + sum(
-            float(x) for x in charges_pending
+        other_total = (
+            voucher_pending_by_student.get(student.student_id, 0)
+            - voucher_pending_by_id.get(voucher.voucher_id, 0)
+            + float(charges_pending_by_student.get(student.student_id, 0))
         )
         results.append(
             VoucherSearchResult(
@@ -201,18 +215,19 @@ def filter_vouchers(
     query = query.order_by(Student.class_name, Student.name, FeeVoucher.fee_month_sort)
     rows = db.execute(query).all()
 
-    # extra-charge pending totals per student, fetched once and cached per request
-    charges_by_student: dict[int, float] = {}
+    # extra-charge pending totals for every student in the result, in one query
+    student_ids = list({v.student_id for v, _, _ in rows})
+    charges_by_student = dict(
+        db.execute(
+            select(ExtraCharge.student_id, func.coalesce(func.sum(ExtraCharge.remaining_amount), 0))
+            .where(ExtraCharge.student_id.in_(student_ids), ExtraCharge.status != "Paid")
+            .group_by(ExtraCharge.student_id)
+        ).all()
+    ) if student_ids else {}
+
     results = []
     for voucher, name, reg in rows:
-        if voucher.student_id not in charges_by_student:
-            pending = db.execute(
-                select(ExtraCharge.remaining_amount).where(
-                    ExtraCharge.student_id == voucher.student_id, ExtraCharge.status != "Paid"
-                )
-            ).scalars().all()
-            charges_by_student[voucher.student_id] = sum(float(x) for x in pending)
-        charges_pending = charges_by_student[voucher.student_id]
+        charges_pending = float(charges_by_student.get(voucher.student_id, 0))
 
         is_overdue = _is_overdue(voucher.fee_month_sort, voucher.status, due_day)
         if overdue_only and not is_overdue:
@@ -273,23 +288,55 @@ def bulk_generate(payload: BulkGenerateRequest, db: Session = Depends(get_db)):
     students = db.execute(
         select(Student).where(Student.class_name.in_(payload.class_names), Student.status == "Active")
     ).scalars().all()
-    return [
-        _generate_voucher(
-            db,
-            s.student_id,
-            payload.year,
-            payload.month,
-            float(s.default_fee) if s.default_fee is not None else grades.get(s.class_name, 0),
-        )
-        for s in students
-    ]
+    if not students:
+        return []
+
+    # One lookup for every existing voucher this month and one commit for the
+    # whole batch, instead of a SELECT + COMMIT per student.
+    fee_month, fee_month_sort = month_label_and_sort(payload.year, payload.month)
+    existing_by_student = {
+        v.student_id: v
+        for v in db.execute(
+            select(FeeVoucher).where(
+                FeeVoucher.student_id.in_([s.student_id for s in students]),
+                FeeVoucher.fee_month == fee_month,
+            )
+        ).scalars().all()
+    }
+    results = []
+    for s in students:
+        total = float(s.default_fee) if s.default_fee is not None else grades.get(s.class_name, 0)
+        voucher = existing_by_student.get(s.student_id)
+        if voucher:
+            # Same regenerate rule as _generate_voucher: update the total,
+            # never touch paid_amount/discount.
+            voucher.total_amount = total
+            voucher.status = _recompute_status(total, float(voucher.paid_amount), float(voucher.discount_amount))
+        else:
+            voucher = FeeVoucher(
+                student_id=s.student_id,
+                fee_month=fee_month,
+                fee_month_sort=fee_month_sort,
+                total_amount=total,
+                paid_amount=0,
+                discount_amount=0,
+                status="Unpaid",
+            )
+            db.add(voucher)
+        results.append(voucher)
+    db.commit()
+    return results
 
 
 @router.post("/{voucher_id}/pay", response_model=VoucherOut)
 def pay_voucher(voucher_id: int, payload: PayVoucherRequest, db: Session = Depends(get_db)):
     if payload.amount <= 0:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Payment amount must be greater than zero.")
-    voucher = db.get(FeeVoucher, voucher_id)
+    # Row lock so two clerks recording a payment for the same voucher at the
+    # same moment can't both pass the balance check and overshoot the total.
+    voucher = db.execute(
+        select(FeeVoucher).where(FeeVoucher.voucher_id == voucher_id).with_for_update()
+    ).scalar_one_or_none()
     if voucher is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Voucher not found")
     remaining = float(voucher.total_amount) - float(voucher.paid_amount) - float(voucher.discount_amount)

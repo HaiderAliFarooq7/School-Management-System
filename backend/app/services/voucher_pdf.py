@@ -1,8 +1,10 @@
+import io
 import os
 import re
 
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
+from reportlab.lib.utils import ImageReader
 from reportlab.pdfgen import canvas
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -13,6 +15,7 @@ from app.models.grade import Grade
 from app.models.school import School
 from app.models.student import Student
 from app.services import qr_service
+from app.services.logo_store import logo_content
 
 
 def _clean_text(text: str) -> str:
@@ -124,17 +127,18 @@ def _draw_receipt(c, db: Session, x0, y0, w, h, student: Student, data: dict, co
 
     y = y0 + h - pad
     logo_size = 20 * mm if compact else 30 * mm
-    if school.logo_path and os.path.exists(school.logo_path):
+    logo = logo_content(school)
+    if logo:
         try:
             c.drawImage(
-                school.logo_path, x0 + w - pad - logo_size, y - logo_size,
+                ImageReader(io.BytesIO(logo[0])), x0 + w - pad - logo_size, y - logo_size,
                 width=logo_size, height=logo_size, preserveAspectRatio=True, mask="auto", anchor="n",
             )
         except Exception:
             pass
 
     header_top = y
-    name_w = w - 2 * pad - (logo_size + 3 * mm if school.logo_path else 0)
+    name_w = w - 2 * pad - (logo_size + 3 * mm if logo else 0)
     c.setFont("Helvetica-Bold", font_title)
     c.drawString(x0 + pad, header_top - font_title, (school.name or "School")[:int(name_w / (font_title * 0.45))])
     c.setFont("Helvetica", font_small)

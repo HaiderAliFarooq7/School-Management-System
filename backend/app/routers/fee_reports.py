@@ -49,15 +49,26 @@ def _gather_pending_report(db: Session, class_names: str, status_filter: str, du
         query = query.where(Student.class_name.in_(class_names.split(",")))
     query = query.order_by(Student.class_name, Student.name)
     students = db.execute(query).scalars().all()
+    student_ids = [s.student_id for s in students]
+
+    # All vouchers and open charges for the whole roster in two queries,
+    # grouped in memory — not two queries per student.
+    vouchers_by_student: dict[int, list[FeeVoucher]] = {}
+    charges_by_student: dict[int, list[ExtraCharge]] = {}
+    if student_ids:
+        for v in db.execute(select(FeeVoucher).where(FeeVoucher.student_id.in_(student_ids))).scalars():
+            vouchers_by_student.setdefault(v.student_id, []).append(v)
+        for c in db.execute(
+            select(ExtraCharge).where(ExtraCharge.student_id.in_(student_ids), ExtraCharge.status != "Paid")
+        ).scalars():
+            charges_by_student.setdefault(c.student_id, []).append(c)
 
     today = datetime.date.today()
     current_sort = f"{today.year:04d}-{today.month:02d}"
     rows = []
     for s in students:
-        vouchers = db.execute(select(FeeVoucher).where(FeeVoucher.student_id == s.student_id)).scalars().all()
-        charges = db.execute(
-            select(ExtraCharge).where(ExtraCharge.student_id == s.student_id, ExtraCharge.status != "Paid")
-        ).scalars().all()
+        vouchers = vouchers_by_student.get(s.student_id, [])
+        charges = charges_by_student.get(s.student_id, [])
 
         vouchers_pending = sum(
             max(float(v.total_amount) - float(v.paid_amount) - float(v.discount_amount), 0) for v in vouchers

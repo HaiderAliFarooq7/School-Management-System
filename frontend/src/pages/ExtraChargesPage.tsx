@@ -8,12 +8,15 @@ import {
 } from '../api/extraCharges'
 import { listGrades } from '../api/grades'
 import { DiscountDialog } from '../components/DiscountDialog'
+import { useConfirm, useToast } from '../components/feedback'
 import { useAuth } from '../context/AuthContext'
 
 export function ExtraChargesPage() {
   const queryClient = useQueryClient()
   const { role } = useAuth()
   const isAdmin = role === 'Admin'
+  const toast = useToast()
+  const confirmAction = useConfirm()
   const [studentId, setStudentId] = useState('')
   const [description, setDescription] = useState('')
   const [amount, setAmount] = useState('')
@@ -35,14 +38,18 @@ export function ExtraChargesPage() {
       queryClient.invalidateQueries({ queryKey: ['charges', sid] })
       setDescription('')
       setAmount('')
+      toast('Charge added.')
     },
-    onError: (e) => alert(String((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Could not add charge.')),
+    onError: (e) => toast(String((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Could not add charge.'), 'error'),
   })
 
   const payMutation = useMutation({
     mutationFn: ({ chargeId, amt }: { chargeId: number; amt: number }) => payCharge(chargeId, amt),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['charges', sid] }),
-    onError: (e) => alert(String((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Payment failed.')),
+    onSuccess: () => {
+      toast('Payment recorded.')
+      queryClient.invalidateQueries({ queryKey: ['charges', sid] })
+    },
+    onError: (e) => toast(String((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Payment failed.'), 'error'),
   })
 
   const discountMutation = useMutation({
@@ -58,8 +65,11 @@ export function ExtraChargesPage() {
 
   const deleteMutation = useMutation({
     mutationFn: (chargeId: number) => deleteCharge(chargeId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['charges', sid] }),
-    onError: () => alert('Cannot delete — this charge already has a payment or discount recorded against it.'),
+    onSuccess: () => {
+      toast('Charge deleted.')
+      queryClient.invalidateQueries({ queryKey: ['charges', sid] })
+    },
+    onError: (e) => toast(String((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Could not delete this charge.'), 'error'),
   })
 
   const bulkDeleteMutation = useMutation({
@@ -68,7 +78,7 @@ export function ExtraChargesPage() {
       queryClient.invalidateQueries({ queryKey: ['charges', sid] })
       setSelected([])
       const skippedMsg = result.skipped.length ? ` ${result.skipped.length} skipped (already have a payment or discount).` : ''
-      alert(`Deleted ${result.deleted} charge(s).${skippedMsg}`)
+      toast(`Deleted ${result.deleted} charge(s).${skippedMsg}`, result.skipped.length ? 'warning' : 'success')
     },
   })
 
@@ -99,10 +109,14 @@ export function ExtraChargesPage() {
             {isAdmin && selected.length > 0 && (
               <Button
                 color="error"
-                onClick={() => {
-                  if (confirm(`Delete ${selected.length} selected charge(s)?`)) {
-                    bulkDeleteMutation.mutate(selected)
-                  }
+                onClick={async () => {
+                  const ok = await confirmAction({
+                    title: `Delete ${selected.length} selected charge(s)?`,
+                    message: 'This permanently removes the selected charges, including any with payments or discounts recorded.',
+                    confirmLabel: 'Delete',
+                    destructive: true,
+                  })
+                  if (ok) bulkDeleteMutation.mutate(selected)
                 }}
               >
                 Delete Selected ({selected.length})
@@ -171,7 +185,15 @@ export function ExtraChargesPage() {
                         <Button
                           size="small"
                           color="error"
-                          onClick={() => { if (confirm('Delete this charge?')) deleteMutation.mutate(c.charge_id) }}
+                          onClick={async () => {
+                            const ok = await confirmAction({
+                              title: 'Delete this charge?',
+                              message: 'The charge and its recorded figures will be permanently removed.',
+                              confirmLabel: 'Delete',
+                              destructive: true,
+                            })
+                            if (ok) deleteMutation.mutate(c.charge_id)
+                          }}
                         >
                           Delete
                         </Button>

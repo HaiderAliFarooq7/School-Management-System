@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 
 from app.config import settings
@@ -33,10 +34,13 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="School Management System", lifespan=lifespan)
 
+# A forgeable signing key means anyone can mint an Admin token, so this is a
+# hard failure, not a warning. DEPLOYMENT.md documents JWT_SECRET as required.
 if settings.jwt_secret == "change-this-secret-in-production":
-    logger.warning(
-        "JWT_SECRET is still the default placeholder value — set a real secret "
-        "via the JWT_SECRET environment variable before going to production."
+    raise RuntimeError(
+        "JWT_SECRET is still the default placeholder value. Generate a real "
+        "secret (e.g. python -c \"import secrets; print(secrets.token_hex(32))\") "
+        "and set it as the JWT_SECRET environment variable before starting."
     )
 
 # Needed whenever the frontend is hosted on a different origin than this API
@@ -50,6 +54,28 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.add_middleware(GZipMiddleware, minimum_size=1024)
+
+
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "no-referrer")
+    response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+    # Render terminates TLS at its proxy, so the original scheme arrives in
+    # X-Forwarded-Proto rather than request.url.scheme.
+    if request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https":
+        response.headers.setdefault("Strict-Transport-Security", "max-age=63072000; includeSubDomains")
+    # API responses are data, never a document to render or cache. Scoped to
+    # /api so the interactive /docs page (which loads Swagger's JS) still works.
+    if request.url.path.startswith("/api"):
+        response.headers.setdefault("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'")
+    if request.url.path.startswith("/api/auth"):
+        response.headers.setdefault("Cache-Control", "no-store")
+    return response
 
 
 @app.exception_handler(Exception)
