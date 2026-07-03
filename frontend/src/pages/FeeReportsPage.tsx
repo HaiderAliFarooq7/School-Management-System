@@ -11,6 +11,7 @@ import {
 } from '../api/feeReports'
 import { listGrades } from '../api/grades'
 import { useAuth } from '../context/AuthContext'
+import { usePhoneColumns } from '../hooks/usePhoneColumns'
 
 export function FeeReportsPage() {
   const { role } = useAuth()
@@ -37,6 +38,7 @@ const STATUS_COLOR: Record<string, 'success' | 'warning' | 'error' | 'default'> 
 }
 
 function PendingReportTab() {
+  const phoneColumns = usePhoneColumns(['registration_no', 'father_name', 'class_name', 'phone', 'vouchers_pending', 'charges_pending', 'is_overdue'])
   const { data: grades } = useQuery({ queryKey: ['grades'], queryFn: listGrades })
   const [selectedClasses, setSelectedClasses] = useState<string[]>([])
   const [statusFilter, setStatusFilter] = useState('')
@@ -131,6 +133,7 @@ function PendingReportTab() {
 
       <Box sx={{ height: 600 }}>
         <DataGrid
+          {...phoneColumns}
           rows={mutation.data ?? []}
           columns={columns}
           getRowId={(row) => row.registration_no}
