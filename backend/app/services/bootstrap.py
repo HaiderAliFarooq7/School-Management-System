@@ -1,5 +1,7 @@
 from pathlib import Path
 
+from alembic import command as alembic_command
+from alembic.config import Config as AlembicConfig
 from sqlalchemy import inspect, select, text
 
 from app.db.session import SessionLocal, engine
@@ -9,6 +11,35 @@ from app.models.school import School
 from app.models.user import User
 from app.services.auth_service import hash_password
 from app.services.logo_store import mime_for_filename
+
+BACKEND_DIR = Path(__file__).resolve().parent.parent.parent  # .../backend
+
+
+def run_migrations() -> None:
+    """Applies any pending Alembic migrations at startup.
+
+    The Render service deploys with just `pip install` + `uvicorn` — its
+    build command does not run `alembic upgrade head`, which made a deploy
+    that added columns crash on boot (UndefinedColumn). Running migrations
+    here makes every deploy self-contained regardless of how the service is
+    configured. Safe with this app's single instance (WEB_CONCURRENCY=1);
+    a no-op when the database is already at head.
+
+    The Config is built programmatically without alembic.ini so env.py
+    skips fileConfig(), which would otherwise disable the app's own loggers.
+    env.py takes the database URL from app.config.settings."""
+    cfg = AlembicConfig()
+    cfg.set_main_option("script_location", str(BACKEND_DIR / "alembic"))
+    logger.info("Applying database migrations (alembic upgrade head)...")
+    try:
+        alembic_command.upgrade(cfg, "head")
+    except Exception as exc:
+        raise RuntimeError(
+            f"Database migration failed at startup: {exc}. The service will "
+            "not start with an out-of-date schema — check DATABASE_URL and "
+            "the migration logs above."
+        ) from exc
+    logger.info("Database migrations up to date")
 
 DEFAULT_ADMIN_USERNAME = "admin"
 DEFAULT_ADMIN_PASSWORD = "admin123"

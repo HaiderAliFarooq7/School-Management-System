@@ -78,8 +78,17 @@ python -c "import secrets; print(secrets.token_hex(32))"
 
 **Build Command:**
 ```bash
-pip install -r backend/requirements.txt && cd backend && alembic upgrade head
+pip install -r backend/requirements.txt
 ```
+
+> Database migrations run **automatically at application startup** (the
+> lifespan calls `alembic upgrade head` programmatically), so the build
+> command doesn't need to run Alembic. Keeping `&& cd backend && alembic
+> upgrade head` in the build command is harmless but redundant. This exists
+> because a real deploy once shipped a migration while the service's build
+> command only ran `pip install` — the app crashed on boot with
+> `UndefinedColumn`. Startup now refuses to run with an out-of-date schema
+> instead of failing halfway.
 
 **Start Command:**
 ```bash
