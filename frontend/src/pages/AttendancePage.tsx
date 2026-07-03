@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  Alert, Box, Button, MenuItem, Select, Table, TableBody, TableCell, TableHead, TableRow, TextField, ToggleButton, ToggleButtonGroup, Typography,
+  Alert, Box, Button, MenuItem, Select, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, ToggleButton, ToggleButtonGroup, Typography,
 } from '@mui/material'
 import { listGrades } from '../api/grades'
 import { listStudents } from '../api/students'
@@ -81,14 +81,14 @@ export function AttendancePage() {
           {saveMessage.text}
         </Alert>
       )}
-      <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
+      <Box sx={{ display: 'flex', gap: 2, mb: 2, flexWrap: 'wrap', alignItems: 'center' }}>
         <Select
           size="small"
           value={className}
           onChange={(e) => setClassName(e.target.value)}
           displayEmpty
           disabled={role === 'Teacher'}
-          sx={{ width: 180 }}
+          sx={{ width: { xs: '100%', sm: 180 } }}
         >
           <MenuItem value="" disabled>Select a class</MenuItem>
           {/* Teachers may only ever mark their own assigned class. */}
@@ -113,7 +113,8 @@ export function AttendancePage() {
       </Box>
 
       {className && (
-        <Table size="small" sx={{ maxWidth: 700, mb: 4 }}>
+        <TableContainer sx={{ maxWidth: 700, mb: 4 }}>
+          <Table size="small" sx={{ minWidth: 540 }}>
           <TableHead>
             <TableRow>
               <TableCell>Reg No</TableCell>
@@ -141,7 +142,8 @@ export function AttendancePage() {
               </TableRow>
             ))}
           </TableBody>
-        </Table>
+          </Table>
+        </TableContainer>
       )}
 
       {summary && summary.length > 0 && (
@@ -149,7 +151,8 @@ export function AttendancePage() {
           <Typography variant="h6" gutterBottom>
             This Month's Summary
           </Typography>
-          <Table size="small" sx={{ maxWidth: 700 }}>
+          <TableContainer sx={{ maxWidth: 700 }}>
+            <Table size="small" sx={{ minWidth: 560 }}>
             <TableHead>
               <TableRow>
                 <TableCell>Reg No</TableCell>
@@ -174,7 +177,8 @@ export function AttendancePage() {
                 </TableRow>
               ))}
             </TableBody>
-          </Table>
+            </Table>
+          </TableContainer>
         </>
       )}
     </Box>

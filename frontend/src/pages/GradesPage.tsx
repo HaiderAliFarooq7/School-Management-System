@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  Box, Button, Chip, IconButton, Table, TableBody, TableCell, TableHead, TableRow, TextField, Typography,
+  Box, Button, Chip, IconButton, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography,
 } from '@mui/material'
 import DeleteIcon from '@mui/icons-material/Delete'
 import { createGrade, deleteGrade, listGrades, updateGrade } from '../api/grades'
@@ -48,7 +48,8 @@ export function GradesPage() {
           {deleteError}
         </Typography>
       )}
-      <Table size="small" sx={{ maxWidth: 700, mb: 3 }}>
+      <TableContainer sx={{ maxWidth: 700, mb: 3 }}>
+        <Table size="small" sx={{ minWidth: 520 }}>
         <TableHead>
           <TableRow>
             <TableCell>Class Name</TableCell>
@@ -98,7 +99,8 @@ export function GradesPage() {
             <TableCell />
           </TableRow>
         </TableBody>
-      </Table>
+        </Table>
+      </TableContainer>
     </Box>
   )
 }

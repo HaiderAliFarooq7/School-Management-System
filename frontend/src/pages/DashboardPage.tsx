@@ -1,8 +1,8 @@
 import { Component, useState, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
-  Box, Button, Card, CardContent, Chip, Grid, MenuItem, Select, Skeleton, Table, TableBody, TableCell, TableHead,
-  TableRow, Typography,
+  Box, Button, Card, CardContent, Chip, Grid, MenuItem, Select, Skeleton, Table, TableBody, TableCell, TableContainer,
+  TableHead, TableRow, Typography,
 } from '@mui/material'
 import { BarChart } from '@mui/x-charts/BarChart'
 import { LineChart } from '@mui/x-charts/LineChart'
@@ -106,7 +106,8 @@ export function DashboardPage() {
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
             Classes that haven't fully marked attendance yet today — worth a nudge to the teacher, or a heads-up to parents.
           </Typography>
-          <Table size="small" sx={{ maxWidth: 600 }}>
+          <TableContainer sx={{ maxWidth: 600 }}>
+            <Table size="small" sx={{ minWidth: 360 }}>
             <TableHead>
               <TableRow>
                 <TableCell>Class</TableCell>
@@ -131,7 +132,8 @@ export function DashboardPage() {
                 </TableRow>
               ))}
             </TableBody>
-          </Table>
+            </Table>
+          </TableContainer>
         </Box>
       )}
 
@@ -248,7 +250,8 @@ function AnalyticsSection() {
             <Card>
               <CardContent>
                 <Typography variant="subtitle1" gutterBottom>Per-Class Breakdown</Typography>
-                <Table size="small">
+                <TableContainer>
+                  <Table size="small" sx={{ minWidth: 560 }}>
                   <TableHead>
                     <TableRow>
                       <TableCell>Class</TableCell>
@@ -271,7 +274,8 @@ function AnalyticsSection() {
                       </TableRow>
                     ))}
                   </TableBody>
-                </Table>
+                  </Table>
+                </TableContainer>
               </CardContent>
             </Card>
           </Grid>

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  Box, Button, Checkbox, Chip, MenuItem, Select, Table, TableBody, TableCell, TableHead, TableRow, TextField, Typography,
+  Box, Button, Checkbox, Chip, MenuItem, Select, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography,
 } from '@mui/material'
 import {
   addCharge, applyChargeDiscount, bulkAddCharge, bulkDeleteCharges, deleteCharge, getStudentCharges, payCharge,
@@ -100,9 +100,9 @@ export function ExtraChargesPage() {
 
       {sid > 0 && (
         <>
-          <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
-            <TextField label="Description" size="small" value={description} onChange={(e) => setDescription(e.target.value)} />
-            <TextField label="Amount" size="small" value={amount} onChange={(e) => setAmount(e.target.value)} />
+          <Box sx={{ display: 'flex', gap: 2, mb: 2, flexWrap: 'wrap', alignItems: 'center' }}>
+            <TextField label="Description" size="small" value={description} onChange={(e) => setDescription(e.target.value)} sx={{ width: { xs: '100%', sm: 220 } }} />
+            <TextField label="Amount" size="small" value={amount} onChange={(e) => setAmount(e.target.value)} sx={{ width: { xs: '100%', sm: 140 } }} />
             <Button variant="contained" onClick={() => addMutation.mutate()} disabled={!description || !amount || Number(amount) <= 0}>
               Add Charge
             </Button>
@@ -124,7 +124,8 @@ export function ExtraChargesPage() {
             )}
           </Box>
 
-          <Table size="small">
+          <TableContainer>
+            <Table size="small" sx={{ minWidth: 720 }}>
             <TableHead>
               <TableRow>
                 {isAdmin && <TableCell></TableCell>}
@@ -202,8 +203,16 @@ export function ExtraChargesPage() {
                   </TableCell>
                 </TableRow>
               ))}
+              {charges?.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={isAdmin ? 8 : 7}>
+                    <Typography color="text.secondary" sx={{ py: 1 }}>No charges for this student.</Typography>
+                  </TableCell>
+                </TableRow>
+              )}
             </TableBody>
-          </Table>
+            </Table>
+          </TableContainer>
         </>
       )}
 
@@ -256,7 +265,7 @@ function BulkChargeSection() {
           value={selectedClasses}
           onChange={(e) => setSelectedClasses(e.target.value as unknown as string[])}
           displayEmpty
-          sx={{ minWidth: 220 }}
+          sx={{ minWidth: 220, width: { xs: '100%', sm: 'auto' } }}
           renderValue={(selected) => (selected as string[]).join(', ') || 'Select classes'}
         >
           {grades?.map((g) => (
@@ -266,8 +275,8 @@ function BulkChargeSection() {
         <Button size="small" onClick={() => setSelectedClasses(grades?.map((g) => g.class_name) ?? [])}>
           Select All Classes
         </Button>
-        <TextField label="Description" size="small" value={description} onChange={(e) => setDescription(e.target.value)} />
-        <TextField label="Amount" size="small" value={amount} onChange={(e) => setAmount(e.target.value)} />
+        <TextField label="Description" size="small" value={description} onChange={(e) => setDescription(e.target.value)} sx={{ width: { xs: '100%', sm: 220 } }} />
+        <TextField label="Amount" size="small" value={amount} onChange={(e) => setAmount(e.target.value)} sx={{ width: { xs: '100%', sm: 140 } }} />
         <Button
           variant="contained"
           disabled={selectedClasses.length === 0 || !description || !amount}

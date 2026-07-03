@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams } from 'react-router-dom'
 import {
   Box, Button, Card, CardContent, Chip, Divider, Grid, MenuItem, Select, Skeleton, Table, TableBody,
-  TableCell, TableHead, TableRow, TextField, Typography,
+  TableCell, TableContainer, TableHead, TableRow, TextField, Typography,
 } from '@mui/material'
 import { getBalanceSheet } from '../api/feeReports'
 import { getStudent, listStudents } from '../api/students'
@@ -236,7 +236,10 @@ function StudentLedger({ studentId }: { studentId: number }) {
       <Typography variant="h6" gutterBottom>
         Fee Vouchers
       </Typography>
-      <Table size="small" sx={{ maxWidth: 950, mb: 2 }}>
+      {/* TableContainer gives the wide ledger its own horizontal scroll on
+          phones — without it the shell's overflow guard clips the right side. */}
+      <TableContainer sx={{ maxWidth: 950, mb: 2 }}>
+        <Table size="small" sx={{ minWidth: 720 }}>
         <TableHead>
           <TableRow>
             <TableCell>Month</TableCell>
@@ -311,8 +314,16 @@ function StudentLedger({ studentId }: { studentId: number }) {
               </TableRow>
             )
           })}
+          {sheet.vouchers.length === 0 && (
+            <TableRow>
+              <TableCell colSpan={7}>
+                <Typography color="text.secondary" sx={{ py: 1 }}>No vouchers yet — generate one below.</Typography>
+              </TableCell>
+            </TableRow>
+          )}
         </TableBody>
-      </Table>
+        </Table>
+      </TableContainer>
 
       <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center', mb: 4 }}>
         <Typography variant="body2" color="text.secondary">Generate voucher:</Typography>
@@ -324,7 +335,8 @@ function StudentLedger({ studentId }: { studentId: number }) {
         </Select>
         <TextField
           label={`Amount (default Rs. ${student.default_fee ?? defaultGenAmount})`}
-          size="small" value={genAmount} onChange={(e) => setGenAmount(e.target.value)} sx={{ width: 220 }}
+          size="small" value={genAmount} onChange={(e) => setGenAmount(e.target.value)}
+          sx={{ width: { xs: '100%', sm: 220 } }}
         />
         <Button variant="contained" onClick={() => generateMutation.mutate()}>Generate</Button>
       </Box>
@@ -334,7 +346,8 @@ function StudentLedger({ studentId }: { studentId: number }) {
       <Typography variant="h6" gutterBottom>
         Extra Charges
       </Typography>
-      <Table size="small" sx={{ maxWidth: 950, mb: 2 }}>
+      <TableContainer sx={{ maxWidth: 950, mb: 2 }}>
+        <Table size="small" sx={{ minWidth: 680 }}>
         <TableHead>
           <TableRow>
             <TableCell>Description</TableCell>
@@ -404,12 +417,20 @@ function StudentLedger({ studentId }: { studentId: number }) {
               </TableRow>
             )
           })}
+          {sheet.charges.length === 0 && (
+            <TableRow>
+              <TableCell colSpan={6}>
+                <Typography color="text.secondary" sx={{ py: 1 }}>No extra charges.</Typography>
+              </TableCell>
+            </TableRow>
+          )}
         </TableBody>
-      </Table>
+        </Table>
+      </TableContainer>
 
       <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
         <Typography variant="body2" color="text.secondary">Add charge:</Typography>
-        <TextField label="Description" size="small" value={chargeDesc} onChange={(e) => setChargeDesc(e.target.value)} />
+        <TextField label="Description" size="small" value={chargeDesc} onChange={(e) => setChargeDesc(e.target.value)} sx={{ width: { xs: '100%', sm: 220 } }} />
         <TextField label="Amount" size="small" value={chargeAmount} onChange={(e) => setChargeAmount(e.target.value)} sx={{ width: 120 }} />
         <Button variant="contained" disabled={!chargeDesc || !chargeAmount} onClick={() => addChargeMutation.mutate()}>
           Add Charge
