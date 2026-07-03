@@ -8,12 +8,12 @@ from urllib.parse import urlparse
 from app.config import settings
 
 
-def _pg_conn_parts() -> dict:
+def _pg_conn_parts(database_url: str | None = None) -> dict:
     # database_url looks like postgresql+psycopg://user:pass@host:port/dbname
     # (Neon, in production). DATABASE_URL is required and validated at
     # startup, so a missing hostname here means the connection string itself
     # is malformed — fail loudly rather than silently guessing localhost.
-    raw = settings.database_url.replace("+psycopg", "")
+    raw = (database_url or settings.database_url).replace("+psycopg", "")
     parsed = urlparse(raw)
     if not parsed.hostname:
         raise RuntimeError("DATABASE_URL has no hostname — check the Neon connection string.")
@@ -39,13 +39,14 @@ def backup_filename() -> str:
     return f"sms_backup_{timestamp}.dump"
 
 
-def backup_database() -> str:
-    """Runs pg_dump into a fresh OS temp file and returns its path. The caller
-    is responsible for streaming it to the client and deleting it afterwards
+def backup_database(database_url: str | None = None) -> str:
+    """Runs pg_dump (of the given tenant database — defaults to the original
+    school) into a fresh OS temp file and returns its path. The caller is
+    responsible for streaming it to the client and deleting it afterwards
     (see the backup router) — nothing is retained on the server."""
     fd, dest_path = tempfile.mkstemp(suffix=".dump", prefix="sms_backup_")
     os.close(fd)
-    conn = _pg_conn_parts()
+    conn = _pg_conn_parts(database_url)
 
     env = os.environ.copy()
     env["PGPASSWORD"] = conn["password"]
@@ -62,8 +63,8 @@ def backup_database() -> str:
     return dest_path
 
 
-def restore_database(src_path: str) -> None:
-    conn = _pg_conn_parts()
+def restore_database(src_path: str, database_url: str | None = None) -> None:
+    conn = _pg_conn_parts(database_url)
     env = os.environ.copy()
     env["PGPASSWORD"] = conn["password"]
     cmd = [

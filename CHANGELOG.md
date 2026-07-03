@@ -1,5 +1,16 @@
 # Changelog
 
+## [Unreleased] — Multi-School SaaS (Phase 5)
+
+Converted to a multi-tenant SaaS: one master (control-plane) database + one fully separate PostgreSQL database per school. Complete reference, diagrams, testing/security reports, deployment and rollback in `MULTI_TENANT.md`.
+
+- Master DB (`sms_master`, self-provisioned at startup): `schools`, `master_users` (global super admin `superadmin`), `user_directory` (username → school login routing; school passwords stay authoritative in each school's own DB).
+- The existing database is auto-registered as School 1 (*Bright Future High School — Haider Campus*) on first boot — all current data and accounts keep working unchanged, zero manual steps.
+- JWTs now carry a signed `school_id`; `get_db` resolves the tenant per request from it, so every existing router became tenant-scoped without modification. Disabled/archived schools are refused before any connection is handed out.
+- `/api/master/*` (super admin only): create school (CREATE DATABASE + full Alembic chain + roles + admin, automatic), disable/activate, delete (=archive, DB retained), reset any school user's password, per-school + system stats, and school switching (re-issued JWT).
+- Frontend: Schools management page, school switcher in the top bar, current school/campus shown in the header; everything else visually unchanged.
+- Tests: original smoke suite 15/15 (no regressions) + new live multi-tenant suite 15/15 (provisioning, isolation, forged-token rejection, permissions, switching, disable/archive) — both run against a real PostgreSQL sandbox.
+
 ## [Unreleased] — Enterprise Hardening Pass (Phase 4)
 
 Full-stack audit-driven pass (see `AUDIT_REPORT.md`): security fixes, N+1 query elimination, a responsive/dark-mode UI foundation, and consistent in-app feedback. No business rules changed.

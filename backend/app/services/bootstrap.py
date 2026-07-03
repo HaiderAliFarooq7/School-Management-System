@@ -15,8 +15,9 @@ from app.services.logo_store import mime_for_filename
 BACKEND_DIR = Path(__file__).resolve().parent.parent.parent  # .../backend
 
 
-def run_migrations() -> None:
-    """Applies any pending Alembic migrations at startup.
+def run_migrations(database_url: str | None = None) -> None:
+    """Applies any pending Alembic migrations at startup — to the default
+    database, or to the given tenant database URL.
 
     The Render service deploys with just `pip install` + `uvicorn` — its
     build command does not run `alembic upgrade head`, which made a deploy
@@ -26,11 +27,11 @@ def run_migrations() -> None:
     a no-op when the database is already at head.
 
     The Config is built programmatically without alembic.ini so env.py
-    skips fileConfig(), which would otherwise disable the app's own loggers.
-    env.py takes the database URL from app.config.settings."""
+    skips fileConfig(), which would otherwise disable the app's own loggers."""
     cfg = AlembicConfig()
     cfg.set_main_option("script_location", str(BACKEND_DIR / "alembic"))
-    logger.info("Applying database migrations (alembic upgrade head)...")
+    if database_url:
+        cfg.attributes["db_url"] = database_url
     try:
         alembic_command.upgrade(cfg, "head")
     except Exception as exc:
@@ -39,7 +40,81 @@ def run_migrations() -> None:
             "not start with an out-of-date schema — check DATABASE_URL and "
             "the migration logs above."
         ) from exc
-    logger.info("Database migrations up to date")
+
+
+DEFAULT_SCHOOL_NAME = "Bright Future High School"
+DEFAULT_CAMPUS_NAME = "Haider Campus"
+SUPER_ADMIN_USERNAME = "superadmin"
+SUPER_ADMIN_PASSWORD = "Admin@123"
+
+
+def init_master() -> None:
+    """Boots the multi-tenant control plane, self-provisioning everything:
+
+    1. Creates the master database itself if missing.
+    2. Creates/updates the master schema (schools, master_users, directory).
+    3. Seeds the global super admin on first boot.
+    4. Registers the original DATABASE_URL database as the first school, so
+       an existing single-school deployment converts in place with all its
+       data intact and zero manual steps.
+    5. Loads the school registry and migrates every active school database.
+    """
+    from app.config import settings
+    from app.db.master import (
+        MasterSessionLocal,
+        MasterUser,
+        School as MasterSchool,
+        ensure_master_database_exists,
+        init_master_schema,
+    )
+    from app.db.tenants import refresh_registry_from_master, registered_school_ids, school_info, tenant_url
+
+    ensure_master_database_exists()
+    init_master_schema()
+
+    mdb = MasterSessionLocal()
+    try:
+        if mdb.execute(select(MasterUser).limit(1)).scalar_one_or_none() is None:
+            mdb.add(
+                MasterUser(
+                    username=SUPER_ADMIN_USERNAME,
+                    name="Super Administrator",
+                    password_hash=hash_password(SUPER_ADMIN_PASSWORD),
+                    role="SuperAdmin",
+                    is_active=True,
+                )
+            )
+            mdb.commit()
+            logger.warning(
+                "Created global super admin (username=%s). Change this password immediately.",
+                SUPER_ADMIN_USERNAME,
+            )
+
+        if mdb.execute(select(MasterSchool).limit(1)).scalar_one_or_none() is None:
+            mdb.add(
+                MasterSchool(
+                    school_name=DEFAULT_SCHOOL_NAME,
+                    campus_name=DEFAULT_CAMPUS_NAME,
+                    database_name=settings.default_tenant_dbname,
+                    database_status="active",
+                )
+            )
+            mdb.commit()
+            logger.info(
+                "Registered existing database %r as the first school (%s — %s)",
+                settings.default_tenant_dbname, DEFAULT_SCHOOL_NAME, DEFAULT_CAMPUS_NAME,
+            )
+    finally:
+        mdb.close()
+
+    refresh_registry_from_master()
+
+    logger.info("Applying database migrations to all active schools...")
+    for school_id in registered_school_ids():
+        info = school_info(school_id)
+        if info and info["status"] == "active":
+            run_migrations(tenant_url(school_id))
+    logger.info("All school databases migrated")
 
 DEFAULT_ADMIN_USERNAME = "admin"
 DEFAULT_ADMIN_PASSWORD = "admin123"

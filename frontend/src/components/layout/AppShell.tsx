@@ -39,8 +39,12 @@ import EventAvailableIcon from '@mui/icons-material/EventAvailable'
 import ManageAccountsIcon from '@mui/icons-material/ManageAccounts'
 import TrendingUpIcon from '@mui/icons-material/TrendingUp'
 import FactCheckIcon from '@mui/icons-material/FactCheck'
+import CorporateFareIcon from '@mui/icons-material/CorporateFare'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
+import { listSchools, switchSchool } from '../../api/master'
 import { ChangePasswordDialog } from '../ChangePasswordDialog'
+import { useToast } from '../feedback'
 import { useAuth } from '../../context/AuthContext'
 import { useColorMode } from '../../theme'
 
@@ -51,6 +55,7 @@ interface NavItem {
   path: string
   icon: React.ReactNode
   roles?: string[]
+  superOnly?: boolean
 }
 
 const NAV_ITEMS: NavItem[] = [
@@ -69,6 +74,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'School Settings', path: '/settings', icon: <SettingsIcon />, roles: ['Admin'] },
   { label: 'Users', path: '/users', icon: <ManageAccountsIcon />, roles: ['Admin'] },
   { label: 'Backup', path: '/backup', icon: <BackupIcon />, roles: ['Admin'] },
+  { label: 'Schools', path: '/schools', icon: <CorporateFareIcon />, superOnly: true },
 ]
 
 export function AppShell() {
@@ -82,10 +88,16 @@ export function AppShell() {
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false)
   const navigate = useNavigate()
   const location = useLocation()
-  const { role, logout } = useAuth()
+  const { role, logout, isSuper, school } = useAuth()
   const { mode, toggle: toggleColorMode } = useColorMode()
 
-  const visibleItems = NAV_ITEMS.filter((item) => !item.roles || (role && item.roles.includes(role)))
+  const visibleItems = NAV_ITEMS.filter((item) => {
+    if (item.superOnly) return isSuper
+    return !item.roles || (role && item.roles.includes(role))
+  })
+  const title = school.schoolName
+    ? `${school.schoolName}${school.campusName ? ` — ${school.campusName}` : ''}`
+    : 'School Management System'
 
   function handleNavigate(path: string) {
     navigate(path)
@@ -122,8 +134,9 @@ export function AppShell() {
             <MenuIcon />
           </IconButton>
           <Typography variant="h6" component="h1" noWrap sx={{ flexGrow: 1, minWidth: 0 }}>
-            School Management System
+            {title}
           </Typography>
+          {isSuper && <SchoolSwitcher />}
           {role && (
             <Chip
               label={role}
@@ -203,5 +216,51 @@ export function AppShell() {
         <Outlet />
       </Box>
     </Box>
+  )
+}
+
+/** Super-admin only: jump between schools from anywhere. Re-issues the JWT
+ * pinned to the selected school and reloads all data for it. */
+function SchoolSwitcher() {
+  const { school, applySession } = useAuth()
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  const toast = useToast()
+  const [anchor, setAnchor] = useState<null | HTMLElement>(null)
+  const { data: schools } = useQuery({ queryKey: ['master-schools'], queryFn: listSchools, staleTime: 60_000 })
+
+  const mutation = useMutation({
+    mutationFn: (id: number) => switchSchool(id),
+    onSuccess: (session) => {
+      applySession(session)
+      queryClient.clear()
+      toast(`Now managing ${session.school_name}${session.campus_name ? ` — ${session.campus_name}` : ''}.`)
+      navigate('/')
+    },
+    onError: () => toast('Could not switch school.', 'error'),
+  })
+
+  const switchable = (schools ?? []).filter((s) => s.database_status !== 'archived')
+
+  return (
+    <>
+      <Tooltip title="Switch school">
+        <IconButton color="inherit" aria-label="Switch school" onClick={(e) => setAnchor(e.currentTarget)}>
+          <CorporateFareIcon />
+        </IconButton>
+      </Tooltip>
+      <Menu anchorEl={anchor} open={!!anchor} onClose={() => setAnchor(null)}>
+        {switchable.map((s) => (
+          <MenuItem
+            key={s.school_id}
+            selected={s.school_id === school.schoolId}
+            onClick={() => { setAnchor(null); if (s.school_id !== school.schoolId) mutation.mutate(s.school_id) }}
+          >
+            {s.school_name}{s.campus_name ? ` — ${s.campus_name}` : ''}
+          </MenuItem>
+        ))}
+        {switchable.length === 0 && <MenuItem disabled>No schools</MenuItem>}
+      </Menu>
+    </>
   )
 }

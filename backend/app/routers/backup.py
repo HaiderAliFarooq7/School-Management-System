@@ -12,7 +12,8 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.db.session import engine, get_db
-from app.deps import require_role
+from app.db.tenants import dispose_engine_for, tenant_url
+from app.deps import CurrentUser, get_current_user, require_role
 from app.logging_config import logger
 from app.models.extra_charge import ExtraCharge
 from app.models.fee_voucher import FeeVoucher
@@ -53,11 +54,12 @@ async def _save_upload_capped(file: UploadFile, dest_path: str, max_bytes: int) 
 
 
 @router.get("/database")
-def run_backup():
-    """Streams a fresh pg_dump straight to the admin's browser, then deletes
-    the temp file from the server — no backup is ever stored on the host."""
+def run_backup(current_user: CurrentUser = Depends(get_current_user)):
+    """Streams a fresh pg_dump of THIS school's database straight to the
+    admin's browser, then deletes the temp file — no backup is retained."""
     try:
-        path = backup_database()
+        url = tenant_url(current_user.school_id) if current_user.school_id else None
+        path = backup_database(url)
     except Exception as exc:
         logger.exception("Database backup failed")
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Backup failed. Check server logs for details.")
@@ -70,7 +72,11 @@ def run_backup():
 
 
 @router.post("/restore")
-async def restore_backup(file: UploadFile, db: Session = Depends(get_db)):
+async def restore_backup(
+    file: UploadFile,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
     """Restores the database from an uploaded .dump file. The upload is
     written to a temp file, restored with pg_restore, and deleted immediately
     afterwards — nothing is retained on the server.
@@ -91,8 +97,12 @@ async def restore_backup(file: UploadFile, db: Session = Depends(get_db)):
     try:
         await _save_upload_capped(file, tmp_path, MAX_DUMP_UPLOAD_BYTES)
         db.close()
+        url = None
+        if current_user.school_id:
+            url = tenant_url(current_user.school_id)
+            dispose_engine_for(current_user.school_id)
         engine.dispose()
-        await asyncio.to_thread(restore_database, tmp_path)
+        await asyncio.to_thread(restore_database, tmp_path, url)
     except HTTPException:
         raise
     except Exception as exc:

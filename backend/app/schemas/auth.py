@@ -11,6 +11,11 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
     role: str
     assigned_class_name: str | None = None
+    # Tenant identity for this session (which school the token is pinned to).
+    school_id: int | None = None
+    school_name: str = ""
+    campus_name: str = ""
+    is_super: bool = False
 
 
 class MeResponse(BaseModel):

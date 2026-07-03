@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from pydantic import field_validator
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -79,6 +79,65 @@ class Settings(BaseSettings):
     @property
     def app_base_url(self) -> str:
         return (self.public_app_url or self.cors_origin_list[0]).rstrip("/")
+
+    # ------------------------------------------------------------ tenancy
+    # DATABASE_URL keeps pointing at the original (first) school database, so
+    # an existing single-school deployment converts to multi-tenant with no
+    # environment changes. The master database defaults to a sibling database
+    # named 'sms_master' on the same PostgreSQL host, overridable via
+    # MASTER_DATABASE_URL.
+    master_database_url_override: str | None = Field(default=None, alias="master_database_url")
+
+    @property
+    def default_tenant_dbname(self) -> str:
+        from sqlalchemy.engine.url import make_url
+        return make_url(self.database_url).database
+
+    @property
+    def master_database_url(self) -> str:
+        if self.master_database_url_override:
+            v = self.master_database_url_override
+            if v.startswith("postgres://"):
+                v = "postgresql+psycopg://" + v[len("postgres://"):]
+            elif v.startswith("postgresql://"):
+                v = "postgresql+psycopg://" + v[len("postgresql://"):]
+            return v
+        from sqlalchemy.engine.url import make_url
+        # render_as_string(hide_password=False): plain str(URL) masks the
+        # password as '***', which would silently break authentication.
+        return make_url(self.database_url).set(database="sms_master").render_as_string(hide_password=False)
+
+    @property
+    def admin_database_url(self) -> str:
+        """Connection for server-level admin work (CREATE DATABASE). Uses the
+        direct (non-pooled) endpoint: PgBouncer's transaction pooling on
+        Neon's '-pooler' hosts can't run CREATE DATABASE."""
+        from sqlalchemy.engine.url import make_url
+        url = make_url(self.database_url)
+        host = (url.host or "").replace("-pooler", "")
+        return url.set(host=host).render_as_string(hide_password=False)
+
+    def tenant_database_url(
+        self,
+        database_name: str,
+        host: str | None = None,
+        port: int | None = None,
+        username: str | None = None,
+        password: str | None = None,
+    ) -> str:
+        """URL for one school's database — same host/credentials as the base
+        deployment unless the school row carries explicit overrides."""
+        from sqlalchemy.engine.url import make_url
+        url = make_url(self.database_url).set(database=database_name)
+        if host:
+            url = url.set(host=host)
+        if port:
+            url = url.set(port=port)
+        if username:
+            url = url.set(username=username)
+        if password:
+            url = url.set(password=password)
+        return url.render_as_string(hide_password=False)
 
 
 settings = Settings()
