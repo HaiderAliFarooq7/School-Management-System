@@ -4,6 +4,12 @@
 
 Full-stack audit-driven pass (see `AUDIT_REPORT.md`): security fixes, N+1 query elimination, a responsive/dark-mode UI foundation, and consistent in-app feedback. No business rules changed.
 
+### Fixed — uploaded school logo disappearing in production (user-reported)
+
+- **Root cause**: the logo was saved to `DATA_DIR` (default `/tmp/sms`) on the Render instance's disk, which is ephemeral — wiped on every restart, redeploy, and free-tier idle spin-down. Local setups never showed the bug because a local disk persists.
+- **Fix**: the logo now lives in the database (`school.logo_data`/`logo_mime`, migration `e5f6a7b8c9d0`) — Neon is the only durable storage in this deployment. Upload validates the bytes really decode as an image; `GET /api/school/logo` serves from the DB with `Cache-Control: no-cache`; voucher/report PDFs draw the logo from bytes instead of a disk path.
+- **Self-healing**: on startup, a legacy on-disk logo is imported into the DB if the file still exists; otherwise the bundled default is seeded. Re-upload your real logo once after deploying and it will persist permanently. The logo committed to the repo as a workaround still works as the first-boot default but is no longer needed for persistence.
+
 ### Security
 
 - **Teacher scoping enforced across the attendance API** — previously a Teacher token could read or write attendance for *any* class or student (`POST /mark`, `GET /api/attendance`, `GET /summary`, `GET /student/{id}`). All now pass through `scope_class_filter`, and `/mark` additionally rejects student IDs not enrolled in the target class.
