@@ -1,15 +1,14 @@
-import shutil
 from pathlib import Path
 
 from sqlalchemy import inspect, select, text
 
-from app.config import LOGO_DIR
 from app.db.session import SessionLocal, engine
 from app.logging_config import logger
 from app.models.role import Role
 from app.models.school import School
 from app.models.user import User
 from app.services.auth_service import hash_password
+from app.services.logo_store import mime_for_filename
 
 DEFAULT_ADMIN_USERNAME = "admin"
 DEFAULT_ADMIN_PASSWORD = "admin123"
@@ -82,27 +81,43 @@ def ensure_default_admin() -> None:
 
 
 def ensure_default_logo() -> None:
-    """First-boot convenience: if the school record has no logo yet, seeds it
-    with the bundled default logo (backend/app/assets/default_school_logo.png)
-    so a fresh deployment isn't blank. No-op the instant any logo_path is
-    already set, so it never overwrites an admin's own uploaded logo."""
-    if not DEFAULT_LOGO_SRC.exists():
-        return
+    """Makes sure the school row has logo bytes in the database. Priority:
 
+    1. logo_data already set — no-op, never overwrites an uploaded logo.
+    2. A legacy on-disk logo (logo_path from the pre-database era) still
+       exists — import it into logo_data so it finally survives restarts.
+    3. Otherwise seed the bundled default logo
+       (backend/app/assets/default_school_logo.png), so a fresh deployment
+       isn't blank.
+
+    The database is the only durable storage on this Render deployment — a
+    disk-stored logo is silently wiped on every restart/redeploy, which is
+    exactly the bug this replaces."""
     db = SessionLocal()
     try:
         school = db.execute(select(School).limit(1)).scalar_one_or_none()
-        if school is not None and school.logo_path:
+        if school is not None and school.logo_data is not None:
             return
-
-        dest = LOGO_DIR / "school_logo.png"
-        shutil.copyfile(DEFAULT_LOGO_SRC, dest)
 
         if school is None:
             school = School()
             db.add(school)
-        school.logo_path = str(dest)
+
+        legacy = Path(school.logo_path) if school.logo_path else None
+        if legacy is not None and legacy.exists():
+            school.logo_data = legacy.read_bytes()
+            school.logo_mime = mime_for_filename(legacy.name)
+            school.logo_path = None
+            db.commit()
+            logger.info("Imported legacy on-disk school logo into the database.")
+            return
+
+        if not DEFAULT_LOGO_SRC.exists():
+            return
+        school.logo_data = DEFAULT_LOGO_SRC.read_bytes()
+        school.logo_mime = "image/png"
+        school.logo_path = None
         db.commit()
-        logger.info("Seeded default school logo.")
+        logger.info("Seeded default school logo into the database.")
     finally:
         db.close()

@@ -10,6 +10,9 @@ export function SchoolSettingsPage() {
   const [form, setForm] = useState<Partial<School>>({})
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Bumped after each upload so the <img> URL changes and the browser can't
+  // keep showing a stale cached copy of the previous logo.
+  const [logoVersion, setLogoVersion] = useState(0)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -43,7 +46,11 @@ export function SchoolSettingsPage() {
 
   const logoMutation = useMutation({
     mutationFn: (file: File) => uploadLogo(file),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['school'] }); setError(null) },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['school'] })
+      setLogoVersion((v) => v + 1)
+      setError(null)
+    },
     onError: (e) => setError(apiErrorMessage(e, 'Logo upload failed.')),
   })
 
@@ -59,7 +66,12 @@ export function SchoolSettingsPage() {
       {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>{error}</Alert>}
 
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
-        <Avatar src={data?.logo_path ? `${apiOriginUrl}/api/school/logo` : undefined} sx={{ width: 64, height: 64 }} variant="rounded" />
+        <Avatar
+          src={data?.has_logo ? `${apiOriginUrl}/api/school/logo?v=${logoVersion}` : undefined}
+          sx={{ width: 64, height: 64 }}
+          variant="rounded"
+          alt="School logo"
+        />
         <Button variant="outlined" onClick={() => fileInputRef.current?.click()}>
           Upload School Logo
         </Button>
