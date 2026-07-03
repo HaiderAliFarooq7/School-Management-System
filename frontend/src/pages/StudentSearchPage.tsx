@@ -1,13 +1,16 @@
 import { useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { DataGrid, type GridColDef } from '@mui/x-data-grid'
-import { Box, Button, Chip, MenuItem, Select, TextField, Typography } from '@mui/material'
+import { Box, Button, Chip, IconButton, MenuItem, Select, TextField, Tooltip, Typography } from '@mui/material'
+import ReceiptLongIcon from '@mui/icons-material/ReceiptLong'
 import { useNavigate } from 'react-router-dom'
 import { searchStudentsAdvanced, type Student, type StudentSearchParams } from '../api/students'
 import { listGrades } from '../api/grades'
+import { usePhoneColumns } from '../hooks/usePhoneColumns'
 
 export function StudentSearchPage() {
   const navigate = useNavigate()
+  const phoneColumns = usePhoneColumns(['registration_no', 'father_name', 'class_name', 'cnic', 'phone', 'fee_status'])
   const { data: grades } = useQuery({ queryKey: ['grades'], queryFn: listGrades })
   const [params, setParams] = useState<StudentSearchParams>({})
 
@@ -36,11 +39,13 @@ export function StudentSearchPage() {
     },
     { field: 'total_pending', headerName: 'Pending (Rs.)', width: 130, type: 'number' },
     {
-      field: 'actions', headerName: '', width: 130, sortable: false,
+      field: 'actions', headerName: '', width: 60, sortable: false,
       renderCell: (p) => (
-        <Button size="small" onClick={() => navigate(`/fees/student/${p.row.student_id}`)}>
-          View Dues
-        </Button>
+        <Tooltip title="View dues">
+          <IconButton size="small" aria-label={`View dues of ${p.row.name}`} onClick={() => navigate(`/fees/student/${p.row.student_id}`)}>
+            <ReceiptLongIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
       ),
     },
   ]
@@ -100,6 +105,7 @@ export function StudentSearchPage() {
 
       <Box sx={{ height: 600 }}>
         <DataGrid
+          {...phoneColumns}
           rows={mutation.data ?? []}
           columns={columns}
           getRowId={(row) => row.student_id}

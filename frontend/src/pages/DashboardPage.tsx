@@ -9,11 +9,13 @@ import { LineChart } from '@mui/x-charts/LineChart'
 import { PieChart } from '@mui/x-charts/PieChart'
 import PersonAddIcon from '@mui/icons-material/PersonAdd'
 import PaidIcon from '@mui/icons-material/Paid'
+import QrCodeScannerIcon from '@mui/icons-material/QrCodeScanner'
 import { useNavigate } from 'react-router-dom'
 import { getAttendanceDailyStatus } from '../api/attendance'
 import { getDashboardStats } from '../api/dashboard'
 import { getFeeAnalytics } from '../api/feeReports'
 import { listGrades } from '../api/grades'
+import { QrScannerDialog } from '../components/QrScannerDialog'
 import { useAuth } from '../context/AuthContext'
 
 const STATUS_COLOR: Record<string, 'success' | 'warning' | 'error' | 'default'> = {
@@ -25,6 +27,7 @@ export function DashboardPage() {
   const { role } = useAuth()
   const isAdmin = role === 'Admin'
   const canSeeAttendanceStatus = role === 'Admin' || role === 'Accountant'
+  const [scannerOpen, setScannerOpen] = useState(false)
   const { data, isLoading } = useQuery({ queryKey: ['dashboard-stats'], queryFn: getDashboardStats, enabled: canSeeAttendanceStatus })
   const { data: attendanceStatus } = useQuery({
     queryKey: ['attendance-daily-status'],
@@ -72,6 +75,17 @@ export function DashboardPage() {
           >
             Student Fee
           </Button>
+          <Button
+            variant="outlined"
+            size="large"
+            color="secondary"
+            startIcon={<QrCodeScannerIcon />}
+            onClick={() => setScannerOpen(true)}
+            sx={{ py: 2, px: 4, fontSize: '1.1rem' }}
+          >
+            Fee QR Scanner
+          </Button>
+          <QrScannerDialog open={scannerOpen} onClose={() => setScannerOpen(false)} />
         </Box>
       )}
 

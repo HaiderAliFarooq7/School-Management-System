@@ -13,9 +13,12 @@ import {
 } from '../api/feeVouchers'
 import { getSchool, updateSchool } from '../api/school'
 import { listStudents, type Student } from '../api/students'
+import QrCodeScannerIcon from '@mui/icons-material/QrCodeScanner'
 import { DiscountDialog } from '../components/DiscountDialog'
+import { QrScannerDialog } from '../components/QrScannerDialog'
 import { useConfirm, useToast } from '../components/feedback'
 import { useAuth } from '../context/AuthContext'
+import { usePhoneColumns } from '../hooks/usePhoneColumns'
 
 const STATUS_COLOR: Record<string, 'success' | 'warning' | 'error'> = {
   Paid: 'success',
@@ -59,6 +62,9 @@ function FindAndPayTab() {
   const navigate = useNavigate()
   const { role } = useAuth()
   const isAdmin = role === 'Admin'
+  const phoneColumns = usePhoneColumns([
+    'registration_no', 'total_amount', 'paid_amount', 'discount_amount', 'status', 'is_overdue', 'charges_pending',
+  ])
   const toast = useToast()
   const confirmAction = useConfirm()
   const { data: grades } = useQuery({ queryKey: ['grades'], queryFn: listGrades })
@@ -341,6 +347,7 @@ function FindAndPayTab() {
           </Box>
           <Box sx={{ height: 600 }}>
             <DataGrid
+              {...phoneColumns}
               rows={filterMutation.data ?? []}
               columns={filterColumns}
               getRowId={(row) => row.voucher_id}
@@ -384,7 +391,9 @@ function VoucherLookup({
   isAdmin: boolean
 }) {
   const navigate = useNavigate()
+  const phoneColumns = usePhoneColumns(['voucher_id', 'registration_no', 'class_name', 'phone', 'other_pending'])
   const [query, setQuery] = useState('')
+  const [scannerOpen, setScannerOpen] = useState(false)
   const [payAmounts, setPayAmounts] = useState<Record<number, string>>({})
   const mutation = useMutation({ mutationFn: (q: string) => searchVouchers(q) })
 
@@ -458,10 +467,14 @@ function VoucherLookup({
         <Button variant="contained" disabled={!query} onClick={() => mutation.mutate(query)}>
           Search
         </Button>
+        <Button variant="outlined" startIcon={<QrCodeScannerIcon />} onClick={() => setScannerOpen(true)}>
+          Scan QR
+        </Button>
       </Box>
+      <QrScannerDialog open={scannerOpen} onClose={() => setScannerOpen(false)} />
       {mutation.data && (
         <Box sx={{ height: 350 }}>
-          <DataGrid rows={mutation.data} columns={columns} getRowId={(row) => row.voucher_id} density="compact" />
+          <DataGrid {...phoneColumns} rows={mutation.data} columns={columns} getRowId={(row) => row.voucher_id} density="compact" />
         </Box>
       )}
 

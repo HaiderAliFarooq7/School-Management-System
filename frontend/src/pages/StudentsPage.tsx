@@ -2,8 +2,10 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { DataGrid, type GridColDef, type GridRowSelectionModel } from '@mui/x-data-grid'
 import {
-  Box, Button, Chip, Menu, MenuItem, Select, TextField, Typography,
+  Box, Button, Chip, IconButton, Menu, MenuItem, Select, TextField, Tooltip, Typography,
 } from '@mui/material'
+import EditIcon from '@mui/icons-material/Edit'
+import ReceiptLongIcon from '@mui/icons-material/ReceiptLong'
 import { useNavigate } from 'react-router-dom'
 import { listStudents, type Student } from '../api/students'
 import { listGrades } from '../api/grades'
@@ -12,11 +14,13 @@ import { StudentEditDialog } from '../components/StudentEditDialog'
 import { StudentImportWizard } from '../components/StudentImportWizard'
 import { useAuth } from '../context/AuthContext'
 import { useDebouncedValue } from '../hooks/useDebouncedValue'
+import { usePhoneColumns } from '../hooks/usePhoneColumns'
 
 export function StudentsPage() {
   const navigate = useNavigate()
   const { role } = useAuth()
   const isAdmin = role === 'Admin'
+  const phoneColumns = usePhoneColumns(['registration_no', 'father_name', 'class_name', 'phone', 'status', 'fee_status'])
   const [search, setSearch] = useState('')
   const [classFilter, setClassFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState('Active')
@@ -72,20 +76,24 @@ export function StudentsPage() {
         return <Chip size="small" label={params.value} color={colorMap[params.value] ?? 'default'} />
       },
     },
-    { field: 'total_pending', headerName: 'Pending (Rs.)', width: 130, type: 'number' },
+    { field: 'total_pending', headerName: 'Pending (Rs.)', width: 110, type: 'number' },
     {
       field: 'actions',
       headerName: 'Actions',
-      width: 180,
+      width: 90,
       sortable: false,
       renderCell: (params) => (
-        <Box sx={{ display: 'flex', gap: 1 }}>
-          <Button size="small" onClick={() => navigate(`/fees/student/${params.row.student_id}`)}>
-            View Dues
-          </Button>
-          <Button size="small" onClick={() => setEditing(params.row)}>
-            Edit
-          </Button>
+        <Box sx={{ display: 'flex' }}>
+          <Tooltip title="View dues">
+            <IconButton size="small" aria-label={`View dues of ${params.row.name}`} onClick={() => navigate(`/fees/student/${params.row.student_id}`)}>
+              <ReceiptLongIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Edit student">
+            <IconButton size="small" aria-label={`Edit ${params.row.name}`} onClick={() => setEditing(params.row)}>
+              <EditIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
         </Box>
       ),
     },
@@ -137,6 +145,7 @@ export function StudentsPage() {
       </Box>
       <Box sx={{ height: 600 }}>
         <DataGrid
+          {...phoneColumns}
           rows={students ?? []}
           columns={columns}
           getRowId={(row) => row.student_id}
