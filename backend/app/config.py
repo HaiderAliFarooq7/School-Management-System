@@ -66,9 +66,19 @@ class Settings(BaseSettings):
             )
         return v
 
+    # Optional explicit public URL of the frontend (no trailing slash) used
+    # for links embedded in printed material (the fee-challan QR code).
+    # Defaults to the first CORS origin, which is already required to be the
+    # production frontend domain.
+    public_app_url: str | None = None
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+
+    @property
+    def app_base_url(self) -> str:
+        return (self.public_app_url or self.cors_origin_list[0]).rstrip("/")
 
 
 settings = Settings()

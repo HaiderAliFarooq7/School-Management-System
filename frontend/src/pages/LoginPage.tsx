@@ -12,7 +12,7 @@ import {
 } from '@mui/material'
 import Visibility from '@mui/icons-material/Visibility'
 import VisibilityOff from '@mui/icons-material/VisibilityOff'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
 function loginErrorMessage(err: unknown): string {
@@ -36,6 +36,7 @@ export function LoginPage() {
   const [submitting, setSubmitting] = useState(false)
   const { login } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -43,7 +44,10 @@ export function LoginPage() {
     setSubmitting(true)
     try {
       const role = await login(username, password)
-      navigate(role === 'Teacher' ? '/attendance' : '/')
+      // A deep link (e.g. a scanned fee-challan QR) lands here first when
+      // signed out — continue to it instead of the role's default page.
+      const from = (location.state as { from?: string } | null)?.from
+      navigate(from && from !== '/login' ? from : role === 'Teacher' ? '/attendance' : '/')
     } catch (err) {
       setError(loginErrorMessage(err))
     } finally {

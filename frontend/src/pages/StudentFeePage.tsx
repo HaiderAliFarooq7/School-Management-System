@@ -11,8 +11,10 @@ import { downloadFile } from '../api/client'
 import { applyVoucherDiscount, deleteVoucher, editVoucher, generateVoucher, payVoucher } from '../api/feeVouchers'
 import { addCharge, applyChargeDiscount, deleteCharge, editCharge, payCharge } from '../api/extraCharges'
 import { listGrades } from '../api/grades'
+import QrCodeScannerIcon from '@mui/icons-material/QrCodeScanner'
 import { DiscountDialog } from '../components/DiscountDialog'
 import { EditFigureDialog } from '../components/EditFigureDialog'
+import { QrScannerDialog } from '../components/QrScannerDialog'
 import { useConfirm, useToast } from '../components/feedback'
 import { useAuth } from '../context/AuthContext'
 import { useDebouncedValue } from '../hooks/useDebouncedValue'
@@ -36,6 +38,7 @@ export function StudentFeePage() {
 function StudentSearchPicker() {
   const navigate = useNavigate()
   const [query, setQuery] = useState('')
+  const [scannerOpen, setScannerOpen] = useState(false)
   const debouncedQuery = useDebouncedValue(query)
   const { data: results, isFetching } = useQuery({
     queryKey: ['student-fee-search', debouncedQuery],
@@ -58,8 +61,17 @@ function StudentSearchPicker() {
         label="Search by name, registration no, or CNIC"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
-        sx={{ mb: 2 }}
+        sx={{ mb: 1.5 }}
       />
+      <Button
+        variant="outlined"
+        startIcon={<QrCodeScannerIcon />}
+        onClick={() => setScannerOpen(true)}
+        sx={{ mb: 2 }}
+      >
+        Scan Challan QR
+      </Button>
+      <QrScannerDialog open={scannerOpen} onClose={() => setScannerOpen(false)} />
       {isFetching && <Typography color="text.secondary">Searching…</Typography>}
       {results?.map((s) => (
         <Box
