@@ -9,6 +9,7 @@ Full-stack audit-driven pass (see `AUDIT_REPORT.md`): security fixes, N+1 query 
 - **Root cause**: the logo was saved to `DATA_DIR` (default `/tmp/sms`) on the Render instance's disk, which is ephemeral — wiped on every restart, redeploy, and free-tier idle spin-down. Local setups never showed the bug because a local disk persists.
 - **Fix**: the logo now lives in the database (`school.logo_data`/`logo_mime`, migration `e5f6a7b8c9d0`) — Neon is the only durable storage in this deployment. Upload validates the bytes really decode as an image; `GET /api/school/logo` serves from the DB with `Cache-Control: no-cache`; voucher/report PDFs draw the logo from bytes instead of a disk path.
 - **Self-healing**: on startup, a legacy on-disk logo is imported into the DB if the file still exists; otherwise the bundled default is seeded. Re-upload your real logo once after deploying and it will persist permanently. The logo committed to the repo as a workaround still works as the first-boot default but is no longer needed for persistence.
+- **Migrations now run automatically at startup** — the first deploy of this fix crashed on Render (`UndefinedColumn: school.logo_data`) because the service's build command only runs `pip install`, never `alembic upgrade head`. The app lifespan now applies pending migrations itself before serving, so deploys are self-contained no matter how the Render service is configured (safe with the single-instance deployment; no-op when already at head).
 
 ### Security
 

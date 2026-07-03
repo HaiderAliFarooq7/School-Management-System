@@ -20,11 +20,17 @@ from app.routers import (
     students,
     users,
 )
-from app.services.bootstrap import ensure_default_admin, ensure_default_logo, verify_database_ready
+from app.services.bootstrap import (
+    ensure_default_admin,
+    ensure_default_logo,
+    run_migrations,
+    verify_database_ready,
+)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    run_migrations()
     verify_database_ready()
     ensure_default_admin()
     ensure_default_logo()
