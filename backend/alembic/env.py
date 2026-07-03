@@ -8,7 +8,10 @@ from app.db.base import Base
 from app import models  # noqa: F401  -- ensures all models are registered on Base.metadata
 
 config = context.config
-config.set_main_option("sqlalchemy.url", settings.database_url)
+# Multi-tenant: bootstrap/provisioning migrate each school database by
+# passing its URL via config.attributes; the CLI default remains the
+# original DATABASE_URL database.
+config.set_main_option("sqlalchemy.url", config.attributes.get("db_url", None) or settings.database_url)
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)

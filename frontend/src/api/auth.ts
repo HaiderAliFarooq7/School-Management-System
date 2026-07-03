@@ -5,6 +5,10 @@ export interface LoginResponse {
   token_type: string
   role: string
   assigned_class_name: string | null
+  school_id: number | null
+  school_name: string
+  campus_name: string
+  is_super: boolean
 }
 
 export interface MeResponse {

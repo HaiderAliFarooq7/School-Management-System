@@ -32,6 +32,7 @@ const StudentSearchPage = lazyPage(() => import('./pages/StudentSearchPage'), 'S
 const StudentFeePage = lazyPage(() => import('./pages/StudentFeePage'), 'StudentFeePage')
 const PromoteStudentsPage = lazyPage(() => import('./pages/PromoteStudentsPage'), 'PromoteStudentsPage')
 const FeeStatusPage = lazyPage(() => import('./pages/FeeStatusPage'), 'FeeStatusPage')
+const SchoolsPage = lazyPage(() => import('./pages/SchoolsPage'), 'SchoolsPage')
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -91,6 +92,8 @@ export default function App() {
                       <Route path="/settings" element={s(<SchoolSettingsPage />)} />
                       <Route path="/users" element={s(<UserManagementPage />)} />
                       <Route path="/backup" element={s(<BackupPage />)} />
+                      {/* Super-admin only — the page itself rejects normal Admins. */}
+                      <Route path="/schools" element={s(<SchoolsPage />)} />
                     </Route>
 
                     <Route element={<ProtectedRoute allowedRoles={['Admin', 'Teacher']} />}>

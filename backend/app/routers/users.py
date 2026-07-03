@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select, update
+from sqlalchemy import delete as sa_delete, select, update
 from sqlalchemy.orm import Session
 
+from app.db.master import MasterSessionLocal, MasterUser, UserDirectory
 from app.db.session import get_db
 from app.deps import CurrentUser, get_current_user, require_role
 from app.models.attendance import AttendanceRecord
@@ -13,6 +14,51 @@ from app.services.auth_service import hash_password
 router = APIRouter(
     prefix="/api/users", tags=["users"], dependencies=[Depends(require_role("Admin"))]
 )
+
+
+def _assert_username_available(username: str, school_id: int | None) -> None:
+    """Usernames must be unique across the whole platform — the master
+    directory routes logins by username alone, so a name already used by
+    another school (or the super admin) must be rejected here."""
+    mdb = MasterSessionLocal()
+    try:
+        if mdb.execute(select(MasterUser).where(MasterUser.username == username)).scalar_one_or_none():
+            raise HTTPException(status.HTTP_409_CONFLICT, "This username is reserved.")
+        row = mdb.execute(
+            select(UserDirectory).where(UserDirectory.username == username)
+        ).scalar_one_or_none()
+        if row is not None and row.school_id != school_id:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "This username is already used by another school — choose a different one.",
+            )
+    finally:
+        mdb.close()
+
+
+def _sync_directory(username: str, school_id: int | None, *, old_username: str | None = None, remove: bool = False) -> None:
+    """Keeps the master login directory in step with tenant user changes."""
+    if school_id is None:
+        return
+    mdb = MasterSessionLocal()
+    try:
+        if old_username and old_username != username:
+            mdb.execute(sa_delete(UserDirectory).where(
+                UserDirectory.username == old_username, UserDirectory.school_id == school_id
+            ))
+        if remove:
+            mdb.execute(sa_delete(UserDirectory).where(
+                UserDirectory.username == username, UserDirectory.school_id == school_id
+            ))
+        else:
+            existing = mdb.execute(
+                select(UserDirectory).where(UserDirectory.username == username)
+            ).scalar_one_or_none()
+            if existing is None:
+                mdb.add(UserDirectory(username=username, school_id=school_id))
+        mdb.commit()
+    finally:
+        mdb.close()
 
 
 def _to_out(user: User, role_name: str) -> UserOut:
@@ -35,13 +81,18 @@ def list_users(db: Session = Depends(get_db)):
 
 
 @router.post("", response_model=UserOut)
-def create_user(payload: UserCreate, db: Session = Depends(get_db)):
+def create_user(
+    payload: UserCreate,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
     role = db.execute(select(Role).where(Role.role_name == payload.role_name)).scalar_one_or_none()
     if role is None:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Unknown role")
     existing = db.execute(select(User).where(User.username == payload.username)).scalar_one_or_none()
     if existing is not None:
         raise HTTPException(status.HTTP_409_CONFLICT, "Username already exists")
+    _assert_username_available(payload.username, current_user.school_id)
 
     user = User(
         username=payload.username,
@@ -52,19 +103,27 @@ def create_user(payload: UserCreate, db: Session = Depends(get_db)):
     )
     db.add(user)
     db.commit()
+    _sync_directory(payload.username, current_user.school_id)
     return _to_out(user, role.role_name)
 
 
 @router.put("/{user_id}", response_model=UserOut)
-def update_user(user_id: int, payload: UserUpdate, db: Session = Depends(get_db)):
+def update_user(
+    user_id: int,
+    payload: UserUpdate,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
     user = db.get(User, user_id)
     if user is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
 
+    old_username = user.username
     if payload.username is not None and payload.username != user.username:
         existing = db.execute(select(User).where(User.username == payload.username)).scalar_one_or_none()
         if existing is not None:
             raise HTTPException(status.HTTP_409_CONFLICT, "Username already exists")
+        _assert_username_available(payload.username, current_user.school_id)
         user.username = payload.username
     if payload.full_name is not None:
         user.full_name = payload.full_name
@@ -80,6 +139,7 @@ def update_user(user_id: int, payload: UserUpdate, db: Session = Depends(get_db)
         user.role_id = role.role_id
         role_name = role.role_name
     db.commit()
+    _sync_directory(user.username, current_user.school_id, old_username=old_username)
 
     if role_name is None:
         role_name = db.get(Role, user.role_id).role_name
@@ -129,6 +189,8 @@ def delete_user(user_id: int, db: Session = Depends(get_db), current_user: Curre
     if user is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
     db.execute(update(AttendanceRecord).where(AttendanceRecord.marked_by_user_id == user_id).values(marked_by_user_id=None))
+    username = user.username
     db.delete(user)
     db.commit()
+    _sync_directory(username, current_user.school_id, remove=True)
     return {"detail": "Deleted"}

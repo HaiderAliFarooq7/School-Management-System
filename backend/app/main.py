@@ -16,6 +16,7 @@ from app.routers import (
     fee_reports,
     fee_vouchers,
     grades,
+    master,
     school,
     students,
     users,
@@ -23,14 +24,18 @@ from app.routers import (
 from app.services.bootstrap import (
     ensure_default_admin,
     ensure_default_logo,
-    run_migrations,
+    init_master,
     verify_database_ready,
 )
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    run_migrations()
+    # init_master self-provisions the multi-tenant control plane (master DB,
+    # super admin, first-school registration) and migrates every active
+    # school database — a fresh deploy or an in-place conversion both boot
+    # with zero manual steps.
+    init_master()
     verify_database_ready()
     ensure_default_admin()
     ensure_default_logo()
@@ -106,6 +111,7 @@ app.include_router(dashboard.router)
 app.include_router(fee_reports.router)
 app.include_router(attendance.router)
 app.include_router(backup.router)
+app.include_router(master.router)
 
 
 @app.get("/")

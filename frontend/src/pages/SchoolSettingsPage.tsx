@@ -3,9 +3,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Alert, Avatar, Box, Button, TextField, Typography } from '@mui/material'
 import { apiOriginUrl } from '../api/client'
 import { getSchool, updateSchool, uploadLogo, type School } from '../api/school'
+import { useAuth } from '../context/AuthContext'
 
 export function SchoolSettingsPage() {
   const queryClient = useQueryClient()
+  const { school } = useAuth()
   const { data } = useQuery({ queryKey: ['school'], queryFn: getSchool })
   const [form, setForm] = useState<Partial<School>>({})
   const [saved, setSaved] = useState(false)
@@ -67,7 +69,7 @@ export function SchoolSettingsPage() {
 
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
         <Avatar
-          src={data?.has_logo ? `${apiOriginUrl}/api/school/logo?v=${logoVersion}` : undefined}
+          src={data?.has_logo ? `${apiOriginUrl}/api/school/logo?v=${logoVersion}${school.schoolId ? `&school_id=${school.schoolId}` : ''}` : undefined}
           sx={{ width: 64, height: 64 }}
           variant="rounded"
           alt="School logo"
