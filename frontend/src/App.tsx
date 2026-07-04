@@ -33,6 +33,8 @@ const StudentFeePage = lazyPage(() => import('./pages/StudentFeePage'), 'Student
 const PromoteStudentsPage = lazyPage(() => import('./pages/PromoteStudentsPage'), 'PromoteStudentsPage')
 const FeeStatusPage = lazyPage(() => import('./pages/FeeStatusPage'), 'FeeStatusPage')
 const SchoolsPage = lazyPage(() => import('./pages/SchoolsPage'), 'SchoolsPage')
+const ParentManagementPage = lazyPage(() => import('./pages/ParentManagementPage'), 'ParentManagementPage')
+const NotificationCenterPage = lazyPage(() => import('./pages/NotificationCenterPage'), 'NotificationCenterPage')
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -92,8 +94,14 @@ export default function App() {
                       <Route path="/settings" element={s(<SchoolSettingsPage />)} />
                       <Route path="/users" element={s(<UserManagementPage />)} />
                       <Route path="/backup" element={s(<BackupPage />)} />
+                      <Route path="/parents" element={s(<ParentManagementPage />)} />
                       {/* Super-admin only — the page itself rejects normal Admins. */}
                       <Route path="/schools" element={s(<SchoolsPage />)} />
+                    </Route>
+
+                    {/* Notification Center: Admin (all types) + Accountant (fee reminders). */}
+                    <Route element={<ProtectedRoute allowedRoles={['Admin', 'Accountant']} />}>
+                      <Route path="/notifications" element={s(<NotificationCenterPage />)} />
                     </Route>
 
                     <Route element={<ProtectedRoute allowedRoles={['Admin', 'Teacher']} />}>
