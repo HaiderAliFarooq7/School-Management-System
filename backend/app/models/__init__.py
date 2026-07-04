@@ -9,6 +9,10 @@ from app.models.payment_history import PaymentHistory
 from app.models.student_contact import StudentContact
 from app.models.qr_code import QRCode
 from app.models.attendance import AttendanceRecord
+from app.models.parent_account import ParentAccount
+from app.models.parent_device import ParentDevice
+from app.models.parent_notification import ParentNotification
+from app.models.notification_log import NotificationLog
 
 __all__ = [
     "Role",
@@ -22,4 +26,8 @@ __all__ = [
     "StudentContact",
     "QRCode",
     "AttendanceRecord",
+    "ParentAccount",
+    "ParentDevice",
+    "ParentNotification",
+    "NotificationLog",
 ]

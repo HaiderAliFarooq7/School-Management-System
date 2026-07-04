@@ -17,6 +17,8 @@ from app.routers import (
     fee_vouchers,
     grades,
     master,
+    parent,
+    parent_admin,
     school,
     students,
     users,
@@ -112,6 +114,10 @@ app.include_router(fee_reports.router)
 app.include_router(attendance.router)
 app.include_router(backup.router)
 app.include_router(master.router)
+# Parent module — parent app API + admin parent management / notification center.
+app.include_router(parent.router)
+app.include_router(parent_admin.router)
+app.include_router(parent_admin.notif_router)
 
 
 @app.get("/")

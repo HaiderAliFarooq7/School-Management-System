@@ -28,6 +28,17 @@ class Settings(BaseSettings):
     # there is no localhost default since this app never runs locally.
     cors_origins: str | None = None
 
+    # --- Parent module / Firebase Cloud Messaging ---
+    # Credentials for sending push to the parent Android app. Optional: the
+    # parent module works fully without them (login, data, history) — only the
+    # push delivery is skipped when unset. Never hardcode secrets; provide via
+    # env, or drop the service-account file at backend/firebase/service-account.json
+    # (which is git-ignored). Precedence: JSON env > file env > default file.
+    firebase_credentials_json: str | None = None
+    firebase_credentials_file: str | None = None
+    # Parent app JWT lifetime — parents stay signed in far longer than staff.
+    parent_jwt_expire_minutes: int = 60 * 24 * 30  # 30 days
+
     model_config = SettingsConfigDict(env_file=None, extra="ignore")
 
     @field_validator("database_url")

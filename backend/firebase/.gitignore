@@ -1,0 +1,6 @@
+# Firebase service-account credentials live here (service-account.json) but are
+# NEVER committed. Provide the file locally, or use the FIREBASE_CREDENTIALS_JSON
+# / FIREBASE_CREDENTIALS_FILE env vars in production (Render). This .gitignore is
+# committed only to document the location and keep the secret out of git.
+*
+!.gitignore
