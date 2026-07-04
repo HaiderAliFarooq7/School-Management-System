@@ -40,6 +40,8 @@ import ManageAccountsIcon from '@mui/icons-material/ManageAccounts'
 import TrendingUpIcon from '@mui/icons-material/TrendingUp'
 import FactCheckIcon from '@mui/icons-material/FactCheck'
 import CorporateFareIcon from '@mui/icons-material/CorporateFare'
+import FamilyRestroomIcon from '@mui/icons-material/FamilyRestroom'
+import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { listSchools, switchSchool } from '../../api/master'
@@ -71,6 +73,8 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Extra Charges', path: '/charges', icon: <RequestQuoteIcon />, roles: ['Admin', 'Accountant'] },
   { label: 'Attendance', path: '/attendance', icon: <EventAvailableIcon />, roles: ['Admin', 'Teacher'] },
   { label: 'Fee Status', path: '/fees/status', icon: <FactCheckIcon />, roles: ['Teacher'] },
+  { label: 'Parents', path: '/parents', icon: <FamilyRestroomIcon />, roles: ['Admin'] },
+  { label: 'Notifications', path: '/notifications', icon: <NotificationsActiveIcon />, roles: ['Admin', 'Accountant'] },
   { label: 'School Settings', path: '/settings', icon: <SettingsIcon />, roles: ['Admin'] },
   { label: 'Users', path: '/users', icon: <ManageAccountsIcon />, roles: ['Admin'] },
   { label: 'Backup', path: '/backup', icon: <BackupIcon />, roles: ['Admin'] },

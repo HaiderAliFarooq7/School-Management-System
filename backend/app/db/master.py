@@ -7,6 +7,9 @@ The master database stores ONLY routing and control data:
                          stay authoritative inside their own school database,
                          so change-password / user management keep working
                          exactly as before)
+  - parent_directory   — parent mobile-number -> school routing, the parent
+                         equivalent of user_directory. Passwords live in the
+                         school's own parent_account table.
 
 Every school's operational data lives in its own PostgreSQL database with
 the existing schema. Nothing in a tenant database can reference another
@@ -70,6 +73,24 @@ class UserDirectory(MasterBase):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     username: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
+    school_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class ParentDirectory(MasterBase):
+    """parent mobile-number -> school routing for the parent app login. The
+    parent equivalent of user_directory: passwords are NOT stored here — after
+    routing to a school, the mobile+password is verified against that school's
+    own parent_account table. ``mobile_core`` is the normalized (digits-only,
+    national) form used for lookup so different formattings of the same number
+    resolve identically."""
+    __tablename__ = "parent_directory"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    mobile_core: Mapped[str] = mapped_column(String(20), unique=True, nullable=False, index=True)
+    mobile_number: Mapped[str] = mapped_column(String(20), nullable=False)
     school_id: Mapped[int] = mapped_column(Integer, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

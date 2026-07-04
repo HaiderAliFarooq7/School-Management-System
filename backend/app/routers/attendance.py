@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.deps import CurrentUser, get_current_user, require_role, scope_class_filter
+from app.logging_config import logger
 from app.models.attendance import AttendanceRecord
 from app.models.grade import Grade
 from app.models.student import Student
@@ -16,8 +17,33 @@ from app.schemas.attendance import (
     AttendanceSummaryRow,
     MarkAttendanceRequest,
 )
+from app.services import notification_service
 
 router = APIRouter(prefix="/api/attendance", tags=["attendance"])
+
+
+def _notify_absent_parents(db: Session, newly_absent_student_ids: list[int]) -> None:
+    """Fire an 'absent' push + inbox notification to each affected student's
+    parents (within this school's tenant session). Best-effort: any failure
+    here must never fail attendance marking, so it runs after the attendance
+    commit and swallows its own errors."""
+    for student_id in newly_absent_student_ids:
+        try:
+            student = db.get(Student, student_id)
+            if student is None:
+                continue
+            notification_service.dispatch_notification(
+                db,
+                notif_type=notification_service.TYPE_ABSENT,
+                audience=notification_service.AUDIENCE_STUDENT,
+                title="Attendance Alert",
+                body=f"{student.name} was marked absent today.",
+                student=student,
+            )
+            db.commit()
+        except Exception:  # noqa: BLE001
+            db.rollback()
+            logger.exception("Failed to send absent notification for student %s", student_id)
 
 
 @router.post("/mark", response_model=list[AttendanceOut], dependencies=[Depends(require_role("Admin", "Teacher"))])
@@ -53,14 +79,22 @@ def mark_attendance(
     } if payload.entries else {}
 
     results = []
+    newly_absent: list[int] = []
+    is_today = payload.attendance_date == date_type.today()
     for entry in payload.entries:
         existing = existing_by_student.get(entry.student_id)
         if existing:
+            # Only notify when a record newly becomes Absent (not on re-saves of
+            # an already-absent record), to avoid duplicate parent alerts.
+            if entry.status == "Absent" and existing.status != "Absent" and is_today:
+                newly_absent.append(entry.student_id)
             existing.status = entry.status
             existing.remarks = entry.remarks
             existing.marked_by_user_id = current_user.user_id
             results.append(existing)
         else:
+            if entry.status == "Absent" and is_today:
+                newly_absent.append(entry.student_id)
             record = AttendanceRecord(
                 student_id=entry.student_id,
                 class_name=payload.class_name,
@@ -73,6 +107,12 @@ def mark_attendance(
             db.add(record)
             results.append(record)
     db.commit()
+
+    # Automatic absent notifications — after the attendance commit, best-effort.
+    if newly_absent:
+        _notify_absent_parents(db, newly_absent)
+        for r in results:
+            db.refresh(r)
     return results
 
 

@@ -5,10 +5,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
+from app.models.parent_account import ParentAccount
 from app.models.user import User
 from app.services.auth_service import decode_access_token
+from app.services.parent_auth_service import decode_parent_access_token
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
+parent_oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/parent/login")
 
 
 class CurrentUser:
@@ -98,6 +101,33 @@ def require_super_admin(request: Request, token: str = Depends(oauth2_scheme)) -
     if master_user is None or not master_user.is_active:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "User not found or inactive")
     return CurrentUser(user_id, "SuperAdmin", None, payload.get("school_id"), is_super=True)
+
+
+class CurrentParent:
+    def __init__(self, parent_id: int, mobile_number: str, school_id: int | None):
+        self.parent_id = parent_id
+        self.mobile_number = mobile_number
+        self.school_id = school_id
+
+
+def get_current_parent(
+    token: str = Depends(parent_oauth2_scheme), db: Session = Depends(get_db)
+) -> CurrentParent:
+    """Auth dependency for parent-app endpoints. Rejects staff tokens: a valid
+    token must carry ``type=parent``. The signed ``school_id`` claim has already
+    routed ``db`` (via get_db) to the parent's own school database, so the
+    parent_account lookup below is automatically tenant-scoped."""
+    try:
+        payload = decode_parent_access_token(token)
+        parent_id = int(payload["sub"])
+    except (JWTError, KeyError, ValueError):
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid or expired token")
+
+    parent = db.get(ParentAccount, parent_id)
+    if parent is None or not parent.is_active:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Parent account not found or inactive")
+
+    return CurrentParent(parent.parent_id, parent.mobile_number, payload.get("school_id"))
 
 
 def scope_class_filter(current_user: CurrentUser, requested_class_name: str | None) -> str | None:
