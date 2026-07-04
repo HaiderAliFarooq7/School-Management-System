@@ -65,9 +65,18 @@ JWT_SECRET=<generate-a-long-random-string>
 JWT_ALGORITHM=HS256
 JWT_EXPIRE_MINUTES=480
 CORS_ORIGINS=https://your-frontend-domain.vercel.app,https://your-alternate-domain.com
+
+# Multi-tenant (optional): master control-plane DB. Defaults to a sibling
+# database 'sms_master' on the same host as DATABASE_URL — only set to override.
+MASTER_DATABASE_URL=
+
+# Parent module / Firebase Cloud Messaging (optional — see Step 6).
+FIREBASE_CREDENTIALS_JSON=
+FIREBASE_CREDENTIALS_FILE=
+PARENT_JWT_EXPIRE_MINUTES=43200
 ```
 
-`DATABASE_URL` and `CORS_ORIGINS` are both required — the app raises a `RuntimeError` and refuses to start if either is missing. `PG_BIN_DIR` can be left unset unless `pg_dump`/`pg_restore` aren't already on Render's PATH.
+`DATABASE_URL` and `CORS_ORIGINS` are both required — the app raises a `RuntimeError` and refuses to start if either is missing. `PG_BIN_DIR` can be left unset unless `pg_dump`/`pg_restore` aren't already on Render's PATH. The `MASTER_DATABASE_URL` and `FIREBASE_*` variables are all optional: without them the master DB is auto-provisioned as a sibling database and the parent app still works fully except for push delivery.
 
 **DO NOT use default JWT_SECRET** — generate a secure random string:
 ```bash
@@ -305,6 +314,62 @@ If a deployment breaks production:
 - Keep migration history clean (never squash `alembic` revisions)
 - Document all production config changes
 - Test migrations on a staging database before production
+
+---
+
+## Step 6: Parent Module & Firebase (Android app)
+
+The parent-facing Android app ("BFHS Parent") is read-only and talks to this
+same backend. Its tables are per-school (added by migration `f6a7b8c9d0e1`,
+applied to every tenant database automatically at startup); the mobile→school
+login routing lives in the master database (`parent_directory`, auto-created).
+
+### 6.1 Backend — Firebase service account (optional, enables push)
+
+Push notifications are the only part that needs Firebase. The rest of the
+parent module (login, dashboard, attendance, fees, extra charges, notification
+history) works without it.
+
+1. In the [Firebase Console](https://console.firebase.google.com) create a
+   project, then **Project Settings → Service accounts → Generate new private key**.
+2. Provide it to the backend by **one** of:
+   - **Render (recommended):** set `FIREBASE_CREDENTIALS_JSON` to the full JSON
+     on one line (Render env values are durable; a file path is not).
+   - **File:** set `FIREBASE_CREDENTIALS_FILE` to an absolute path, or drop the
+     file at `backend/firebase/service-account.json` (git-ignored).
+3. `PARENT_JWT_EXPIRE_MINUTES` (default 43200 = 30 days) controls how long a
+   parent stays signed in.
+
+> **Never commit** `service-account.json` or `google-services.json`. Both are
+> git-ignored. Rotate the key immediately if it ever leaks.
+
+### 6.2 Android app — configuration
+
+1. In the same Firebase project add an **Android app** with package
+   `com.bfhs.parent`, download `google-services.json`, and place it at
+   `BFHS Parent App/app/google-services.json` (git-ignored). The Gradle
+   `google-services` plugin applies only when that file is present, so the app
+   still builds without it.
+2. Set the backend URL: `BASE_URL` in `BFHS Parent App/app/build.gradle.kts`
+   (`defaultConfig → buildConfigField`) → your Render backend origin.
+3. Build: `./gradlew :app:assembleDebug` (or a release build for the Play Store).
+
+### 6.3 Provisioning parent logins
+
+- In the web admin open **Parents → “Sync from Students”** to create a login for
+  every parent mobile number found on that school's students (default password =
+  the mobile number; the parent is prompted to change it). Accounts can also be
+  added individually.
+- Parents log in with **mobile number + password** (no OTP). One mobile number
+  linked to several students shows all of them.
+
+### 6.4 Notifications
+
+- **Automatic:** marking a student **Absent** pushes an alert to that child's parents.
+- **Manual (Notification Center):** **Admin** sends announcements / fee reminders
+  to a student, class, or the whole school; **Accountant** may send fee reminders
+  only; **Teachers** cannot send. Every send is recorded in Notification History
+  with delivery counts.
 
 ---
 
