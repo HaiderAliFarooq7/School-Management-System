@@ -9,6 +9,7 @@ from app.deps import CurrentUser, get_current_user, require_role, scope_class_fi
 from app.logging_config import logger
 from app.models.attendance import AttendanceRecord
 from app.models.grade import Grade
+from app.models.school import School
 from app.models.student import Student
 from app.schemas.attendance import (
     AbsentTodayRow,
@@ -32,18 +33,25 @@ def _notify_absent_parents(db: Session, newly_absent_student_ids: list[int]) -> 
             student = db.get(Student, student_id)
             if student is None:
                 continue
+            title, body = notification_service.absent_message(student)
             notification_service.dispatch_notification(
                 db,
                 notif_type=notification_service.TYPE_ABSENT,
                 audience=notification_service.AUDIENCE_STUDENT,
-                title="Attendance Alert",
-                body=f"{student.name} was marked absent today.",
+                title=title,
+                body=body,
                 student=student,
             )
             db.commit()
         except Exception:  # noqa: BLE001
             db.rollback()
             logger.exception("Failed to send absent notification for student %s", student_id)
+
+
+def _auto_notify_enabled(db: Session) -> bool:
+    """Whether this school has automatic absent notifications turned on."""
+    school = db.execute(select(School).limit(1)).scalar_one_or_none()
+    return school is None or school.auto_notify_absent
 
 
 @router.post("/mark", response_model=list[AttendanceOut], dependencies=[Depends(require_role("Admin", "Teacher"))])
@@ -108,8 +116,9 @@ def mark_attendance(
             results.append(record)
     db.commit()
 
-    # Automatic absent notifications — after the attendance commit, best-effort.
-    if newly_absent:
+    # Automatic absent notifications — after the attendance commit, best-effort,
+    # and only when the school hasn't disabled them.
+    if newly_absent and _auto_notify_enabled(db):
         _notify_absent_parents(db, newly_absent)
         for r in results:
             db.refresh(r)
