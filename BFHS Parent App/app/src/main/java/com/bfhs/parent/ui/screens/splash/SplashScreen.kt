@@ -6,6 +6,7 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -33,6 +34,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -107,22 +109,13 @@ fun SplashScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(22.dp)
         ) {
-            Box(
+            Image(
+                painter = painterResource(R.drawable.school_logo),
+                contentDescription = stringResource(R.string.app_name),
                 modifier = Modifier
-                    .size(104.dp)
+                    .size(128.dp)
                     .alpha(glowAlpha)
-                    .background(BfhsColors.GlassFillStrong, RoundedCornerShape(32.dp))
-                    .border(1.dp, BfhsColors.GlassBorderStrong, RoundedCornerShape(32.dp)),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = stringResource(R.string.logo_monogram),
-                    color = BfhsColors.AccentGold,
-                    fontSize = 34.sp,
-                    fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
-                    letterSpacing = 0.5.sp
-                )
-            }
+            )
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(6.dp)
