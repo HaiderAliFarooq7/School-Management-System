@@ -80,8 +80,14 @@ def send_to_tokens(
     title: str,
     body: str,
     data: dict[str, str] | None = None,
+    channel_id: str | None = None,
 ) -> tuple[int, int, list[str]]:
     """Send a data+notification message to many device tokens.
+
+    ``channel_id`` pins the Android notification channel so the OS shows it with
+    the right importance/sound — e.g. the high-importance "attendance_alerts"
+    channel makes an absent alert a proper heads-up notification with sound,
+    rather than a silent one on the default channel.
 
     Returns ``(delivered, failed, invalid_tokens)``. ``invalid_tokens`` are
     tokens FCM reported as unregistered/invalid so the caller can prune them.
@@ -108,7 +114,14 @@ def send_to_tokens(
                 tokens=chunk,
                 notification=messaging.Notification(title=title, body=body),
                 data={k: str(v) for k, v in (data or {}).items()},
-                android=messaging.AndroidConfig(priority="high"),
+                android=messaging.AndroidConfig(
+                    priority="high",
+                    notification=messaging.AndroidNotification(
+                        channel_id=channel_id or "school_announcements",
+                        sound="default",
+                        default_vibrate_timings=True,
+                    ),
+                ),
             )
             try:
                 response = messaging.send_each_for_multicast(message, app=_app)

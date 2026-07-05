@@ -65,6 +65,19 @@ class SendNotificationRequest(BaseModel):
     class_name: str | None = None
 
 
+class NotifSettingsOut(BaseModel):
+    auto_notify_absent: bool
+
+
+class NotifSettingsUpdate(BaseModel):
+    auto_notify_absent: bool
+
+
+class AbsentAllResponse(BaseModel):
+    notified: int
+    detail: str
+
+
 class NotificationLogOut(BaseModel):
     log_id: int
     notif_type: str

@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">BFHS Parent</string>
+    <string name="logo_monogram" translatable="false">BF</string>
+
+    <!-- Splash -->
+    <string name="splash_tagline">Your child\'s school, in your pocket</string>
+    <string name="splash_tap_to_continue">Tap to continue</string>
+
+    <!-- Login -->
+    <string name="login_welcome">Welcome back</string>
+    <string name="login_subtitle">Sign in to view your children\'s school updates</string>
+    <string name="login_mobile_label">Mobile Number</string>
+    <string name="login_mobile_hint" translatable="false">03XX XXXXXXX</string>
+    <string name="login_password_label">Password</string>
+    <string name="login_forgot_password">Forgot password?</string>
+    <string name="login_button">Log In</string>
+    <string name="login_help">Need help? Contact your school office</string>
+
+    <!-- Dashboard -->
+    <string name="dashboard_greeting">Assalam-o-Alaikum</string>
+    <string name="dashboard_my_children">My Children</string>
+    <string name="dashboard_today">Today</string>
+    <string name="dashboard_dues">Dues</string>
+
+    <!-- Status -->
+    <string name="status_present">Present</string>
+    <string name="status_absent">Absent</string>
+    <string name="status_leave">Leave</string>
+    <string name="status_paid">Paid</string>
+    <string name="status_unpaid">Unpaid</string>
+
+    <!-- Student detail -->
+    <string name="detail_father">Father</string>
+    <string name="detail_attendance">Attendance</string>
+    <string name="detail_monthly_fee">Monthly Fee</string>
+    <string name="detail_extra_charges">Charges</string>
+    <string name="detail_present_today">Present today</string>
+    <string name="detail_absent_today">Absent today</string>
+    <string name="detail_leave_today">On leave today</string>
+    <string name="detail_percent_this_month">%1$d%% this month</string>
+    <string name="detail_fee_due">%1$s due · %2$s</string>
+    <string name="detail_fee_paid">%1$s paid</string>
+    <string name="detail_charges_pending">%1$d pending · %2$s</string>
+    <string name="detail_charges_none">No pending charges</string>
+    <string name="detail_view_daily_record">View daily record</string>
+    <string name="detail_view_fee">View fee details</string>
+    <string name="detail_view_charges">View charges</string>
+    <string name="detail_coming_soon">More modules — Homework, Exam Results, Timetable — coming soon</string>
+
+    <!-- Attendance -->
+    <string name="attendance_overall">Overall</string>
+
+    <!-- Fee -->
+    <string name="fee_due">Due %1$s</string>
+    <string name="fee_view_only">View only — visit the school office to pay</string>
+    <string name="fee_history">History</string>
+
+    <!-- Notifications -->
+    <string name="notifications_title">Notifications</string>
+
+    <!-- Settings -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_school_profile">School Profile</string>
+    <string name="settings_language">Language</string>
+    <string name="settings_about_school">About School</string>
+    <string name="settings_logout">Log Out</string>
+
+    <!-- Language -->
+    <string name="language_english" translatable="false">English</string>
+    <string name="language_english_desc">Default app language</string>
+    <string name="language_urdu" translatable="false">اردو (Urdu)</string>
+    <string name="language_urdu_short" translatable="false">اردو</string>
+    <string name="language_urdu_desc">Right-to-left layout</string>
+    <string name="language_footnote">Full Urdu translation is coming in a future update</string>
+
+    <!-- School profile -->
+    <string name="school_principal">Principal</string>
+    <string name="school_established">Established</string>
+    <string name="school_phone">Phone</string>
+    <string name="school_email">Email</string>
+    <string name="school_address">Address</string>
+    <string name="school_website">Website</string>
+
+    <!-- Navigation -->
+    <string name="nav_home">Home</string>
+    <string name="nav_notices">Notices</string>
+    <string name="nav_settings">Settings</string>
+
+    <!-- Notification channels -->
+    <string name="channel_attendance">Attendance Alerts</string>
+    <string name="channel_fee">Fee Reminders</string>
+    <string name="channel_announcements">School Announcements</string>
+    <string name="fcm_channel_announcements" translatable="false">school_announcements</string>
+</resources>

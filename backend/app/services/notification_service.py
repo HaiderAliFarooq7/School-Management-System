@@ -21,6 +21,7 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.models.attendance import AttendanceRecord
 from app.models.notification_log import NotificationLog
 from app.models.parent_account import ParentAccount
 from app.models.parent_device import ParentDevice
@@ -37,6 +38,14 @@ TYPE_ANNOUNCEMENT = "announcement"
 AUDIENCE_STUDENT = "student"
 AUDIENCE_CLASS = "class"
 AUDIENCE_SCHOOL = "school"
+
+# Android notification channels (must match BfhsParentApp's channel IDs) so each
+# type shows with the right importance/sound on the device.
+_CHANNEL_FOR_TYPE = {
+    TYPE_ABSENT: "attendance_alerts",
+    TYPE_FEE_REMINDER: "fee_reminders",
+    TYPE_ANNOUNCEMENT: "school_announcements",
+}
 
 
 def _all_active_parents(db: Session) -> list[ParentAccount]:
@@ -122,7 +131,8 @@ def dispatch_notification(
         if student_id is not None:
             data["student_id"] = str(student_id)
         delivered, failed, invalid = firebase_service.send_to_tokens(
-            tokens, title=title, body=body, data=data
+            tokens, title=title, body=body, data=data,
+            channel_id=_CHANNEL_FOR_TYPE.get(notif_type),
         )
         if invalid:
             invalid_set = set(invalid)
@@ -145,3 +155,68 @@ def dispatch_notification(
     db.add(log)
     db.flush()
     return log
+
+
+# --------------------------------------------------------------------------- #
+# Message templates (server-side defaults; the admin UI can edit before sending)
+# --------------------------------------------------------------------------- #
+
+def absent_message(student: Student) -> tuple[str, str]:
+    """(title, body) for an absent alert — includes student name and class."""
+    return (
+        "Attendance Alert",
+        f"Dear Parent, your child {student.name} ({student.class_name}) was "
+        f"marked absent today. Please contact the school office if this is "
+        f"unexpected.",
+    )
+
+
+def fee_reminder_message(student: Student, remaining: float) -> tuple[str, str]:
+    """(title, body) for a fee-dues reminder — includes name, class, exact amount."""
+    amount = f"Rs. {int(round(remaining)):,}"
+    return (
+        "Fee Reminder",
+        f"Dear Parent, {amount} is still pending for {student.name} "
+        f"({student.class_name}). Kindly submit the remaining dues at the "
+        f"school office. Thank you.",
+    )
+
+
+def notify_all_absentees(
+    db: Session,
+    *,
+    attendance_date=None,
+    sent_by_user_id: int | None = None,
+) -> int:
+    """Send an absent alert to the parents of every student marked Absent on the
+    given day (default today), within this school. Returns the number of
+    students notified. The caller commits."""
+    from datetime import date as _date
+
+    target = attendance_date or _date.today()
+    student_ids = db.execute(
+        select(AttendanceRecord.student_id)
+        .where(
+            AttendanceRecord.attendance_date == target,
+            AttendanceRecord.status == "Absent",
+        )
+        .distinct()
+    ).scalars().all()
+
+    count = 0
+    for sid in student_ids:
+        student = db.get(Student, sid)
+        if student is None:
+            continue
+        title, body = absent_message(student)
+        dispatch_notification(
+            db,
+            notif_type=TYPE_ABSENT,
+            audience=AUDIENCE_STUDENT,
+            title=title,
+            body=body,
+            student=student,
+            sent_by_user_id=sent_by_user_id,
+        )
+        count += 1
+    return count

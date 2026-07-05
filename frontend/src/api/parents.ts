@@ -105,3 +105,26 @@ export async function listNotificationLog(limit = 100): Promise<NotificationLog[
   const { data } = await apiClient.get<NotificationLog[]>('/admin/notifications/log', { params: { limit } })
   return data
 }
+
+export interface NotifSettings {
+  auto_notify_absent: boolean
+}
+
+export async function getNotifSettings(): Promise<NotifSettings> {
+  const { data } = await apiClient.get<NotifSettings>('/admin/notifications/settings')
+  return data
+}
+
+export async function updateNotifSettings(autoNotifyAbsent: boolean): Promise<NotifSettings> {
+  const { data } = await apiClient.put<NotifSettings>('/admin/notifications/settings', {
+    auto_notify_absent: autoNotifyAbsent,
+  })
+  return data
+}
+
+export async function notifyAllAbsentees(): Promise<{ notified: number; detail: string }> {
+  const { data } = await apiClient.post<{ notified: number; detail: string }>(
+    '/admin/notifications/absent-all',
+  )
+  return data
+}

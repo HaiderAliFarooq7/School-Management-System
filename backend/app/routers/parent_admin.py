@@ -25,8 +25,12 @@ from app.deps import CurrentUser, get_current_user, require_role
 from app.models.notification_log import NotificationLog
 from app.models.parent_account import ParentAccount
 from app.models.parent_device import ParentDevice
+from app.models.school import School
 from app.models.student import Student
 from app.schemas.parent_admin import (
+    AbsentAllResponse,
+    NotifSettingsOut,
+    NotifSettingsUpdate,
     NotificationLogOut,
     ParentAccountOut,
     ParentCreateRequest,
@@ -293,3 +297,42 @@ def notification_history(
     return db.execute(
         select(NotificationLog).order_by(NotificationLog.created_at.desc()).limit(min(limit, 500))
     ).scalars().all()
+
+
+@notif_router.get("/settings", response_model=NotifSettingsOut)
+def get_notification_settings(
+    current_user: CurrentUser = Depends(require_role("Admin")),
+    db: Session = Depends(get_db),
+):
+    school = db.execute(select(School).limit(1)).scalar_one_or_none()
+    return NotifSettingsOut(auto_notify_absent=school is None or school.auto_notify_absent)
+
+
+@notif_router.put("/settings", response_model=NotifSettingsOut)
+def update_notification_settings(
+    payload: NotifSettingsUpdate,
+    current_user: CurrentUser = Depends(require_role("Admin")),
+    db: Session = Depends(get_db),
+):
+    school = db.execute(select(School).limit(1)).scalar_one_or_none()
+    if school is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "School profile not configured")
+    school.auto_notify_absent = payload.auto_notify_absent
+    db.commit()
+    return NotifSettingsOut(auto_notify_absent=school.auto_notify_absent)
+
+
+@notif_router.post("/absent-all", response_model=AbsentAllResponse)
+def notify_all_absentees(
+    current_user: CurrentUser = Depends(require_role("Admin")),
+    db: Session = Depends(get_db),
+):
+    """Send an absent alert to the parents of every student marked Absent today
+    (this school). Useful when auto-notify is off, or to re-send in one click."""
+    count = notification_service.notify_all_absentees(
+        db, sent_by_user_id=current_user.user_id if not current_user.is_super else None
+    )
+    db.commit()
+    return AbsentAllResponse(
+        notified=count, detail=f"Sent absent alerts for {count} student(s) marked absent today."
+    )
