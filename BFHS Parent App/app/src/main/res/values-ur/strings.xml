@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Urdu localization. Per the design note, full translation lands in a future
+         update — core labels are translated; remaining strings fall back to English. -->
+    <string name="splash_tagline">آپ کے بچے کا اسکول، آپ کی جیب میں</string>
+    <string name="splash_tap_to_continue">جاری رکھنے کے لیے ٹیپ کریں</string>
+
+    <string name="login_welcome">خوش آمدید</string>
+    <string name="login_subtitle">اپنے بچوں کی اسکول اپڈیٹس دیکھنے کے لیے سائن ان کریں</string>
+    <string name="login_mobile_label">موبائل نمبر</string>
+    <string name="login_password_label">پاس ورڈ</string>
+    <string name="login_forgot_password">پاس ورڈ بھول گئے؟</string>
+    <string name="login_button">لاگ ان</string>
+    <string name="login_help">مدد چاہیے؟ اپنے اسکول کے دفتر سے رابطہ کریں</string>
+
+    <string name="dashboard_greeting">السلام علیکم</string>
+    <string name="dashboard_my_children">میرے بچے</string>
+    <string name="dashboard_today">آج</string>
+    <string name="dashboard_dues">بقایا</string>
+
+    <string name="status_present">حاضر</string>
+    <string name="status_absent">غیر حاضر</string>
+    <string name="status_leave">رخصت</string>
+    <string name="status_paid">ادا شدہ</string>
+    <string name="status_unpaid">غیر ادا شدہ</string>
+
+    <string name="detail_father">والد</string>
+    <string name="detail_attendance">حاضری</string>
+    <string name="detail_monthly_fee">ماہانہ فیس</string>
+    <string name="detail_extra_charges">چارجز</string>
+
+    <string name="attendance_overall">مجموعی</string>
+
+    <string name="fee_view_only">صرف دیکھنے کے لیے — ادائیگی کے لیے اسکول کے دفتر تشریف لائیں</string>
+    <string name="fee_history">سابقہ ریکارڈ</string>
+
+    <string name="notifications_title">اطلاعات</string>
+
+    <string name="settings_title">ترتیبات</string>
+    <string name="settings_school_profile">اسکول پروفائل</string>
+    <string name="settings_language">زبان</string>
+    <string name="settings_about_school">اسکول کے بارے میں</string>
+    <string name="settings_logout">لاگ آؤٹ</string>
+
+    <string name="school_principal">پرنسپل</string>
+    <string name="school_established">قیام</string>
+    <string name="school_phone">فون</string>
+    <string name="school_email">ای میل</string>
+    <string name="school_address">پتہ</string>
+    <string name="school_website">ویب سائٹ</string>
+
+    <string name="nav_home">ہوم</string>
+    <string name="nav_notices">اطلاعات</string>
+    <string name="nav_settings">ترتیبات</string>
+
+    <string name="channel_attendance">حاضری الرٹس</string>
+    <string name="channel_fee">فیس یاد دہانی</string>
+    <string name="channel_announcements">اسکول اعلانات</string>
+</resources>
