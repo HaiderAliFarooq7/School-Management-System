@@ -1,5 +1,6 @@
 package com.bfhs.parent.ui.screens.login
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -34,6 +35,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.KeyboardType
@@ -74,20 +76,11 @@ fun LoginScreen(
     ) {
         // Header
         Column(modifier = Modifier.padding(start = 28.dp, end = 28.dp, top = 36.dp)) {
-            Box(
-                modifier = Modifier
-                    .size(56.dp)
-                    .background(BfhsColors.GlassFillStrong, RoundedCornerShape(18.dp))
-                    .border(1.dp, BfhsColors.GlassBorderStrong, RoundedCornerShape(18.dp)),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = stringResource(R.string.logo_monogram),
-                    color = BfhsColors.AccentGold,
-                    fontSize = 18.sp,
-                    fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
-                )
-            }
+            Image(
+                painter = painterResource(R.drawable.school_logo),
+                contentDescription = stringResource(R.string.app_name),
+                modifier = Modifier.size(64.dp)
+            )
             Spacer(Modifier.height(20.dp))
             Text(
                 text = stringResource(R.string.login_welcome),

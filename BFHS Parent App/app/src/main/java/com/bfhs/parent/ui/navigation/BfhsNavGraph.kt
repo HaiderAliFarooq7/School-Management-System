@@ -118,12 +118,7 @@ fun BfhsNavGraph(
                 Routes.STUDENT_DETAIL,
                 arguments = listOf(navArgument("studentId") { type = NavType.StringType })
             ) {
-                StudentDetailScreen(
-                    onBack = { navController.popBackStack() },
-                    onAttendance = { navController.navigate(Routes.attendance(it)) },
-                    onFee = { navController.navigate(Routes.fee(it)) },
-                    onCharges = { navController.navigate(Routes.charges(it)) }
-                )
+                StudentDetailScreen(onBack = { navController.popBackStack() })
             }
             composable(
                 Routes.ATTENDANCE,
