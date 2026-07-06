@@ -43,6 +43,9 @@
     <string name="detail_fee_paid">%1$s paid</string>
     <string name="detail_charges_pending">%1$d pending · %2$s</string>
     <string name="detail_charges_none">No pending charges</string>
+    <string name="detail_fees_dues">Fees &amp; Dues</string>
+    <string name="detail_total_dues">Total Remaining Dues</string>
+    <string name="detail_fees_all_paid">All monthly fees are paid.</string>
     <string name="detail_view_daily_record">View daily record</string>
     <string name="detail_view_fee">View fee details</string>
     <string name="detail_view_charges">View charges</string>
@@ -58,6 +61,7 @@
 
     <!-- Notifications -->
     <string name="notifications_title">Notifications</string>
+    <string name="action_close">Close</string>
 
     <!-- Settings -->
     <string name="settings_title">Settings</string>

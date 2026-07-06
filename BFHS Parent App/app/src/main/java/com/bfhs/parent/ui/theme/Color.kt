@@ -11,6 +11,7 @@ import androidx.compose.ui.graphics.Color
 object BfhsColors {
     // Base surfaces
     val BackgroundBase = Color(0xFF180508)
+    val DialogSurface = Color(0xFF2A0910)   // opaque dark maroon for dialogs
 
     // Gradient stops
     val HeaderGradientStart = Color(0xFF6E1B26)
