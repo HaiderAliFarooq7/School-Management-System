@@ -50,13 +50,18 @@ const TEMPLATES: Record<NotifType, Template[]> = {
   ],
   absent: [
     { label: 'Custom (blank)', title: '', body: '' },
-    { label: 'Absent alert', title: 'Attendance Alert', body: 'Dear Parent, your child [student] ([class]) was marked absent today. Please contact the school office if this is unexpected.' },
+    { label: 'Absent alert', title: 'Attendance Alert', body: 'Dear Parent, your child {student} ({class}) was marked absent today. Please contact the school office if this is unexpected.' },
   ],
 }
 
+// Short-codes the backend fills per student when a notification targets one
+// student: {student} {class} {father} {amount} {date}. Shown to the admin below.
+const SHORT_CODES = '{student}, {class}, {father}, {amount}, {date}'
+
 function duesMessage(student: Student | null): string {
   if (!student) {
-    return 'Dear Parent, [amount] is pending for [student] ([class]). Kindly submit the remaining dues at the school office. Thank you.'
+    // Leave short-codes in place — the backend fills them for the chosen student.
+    return 'Dear Parent, {amount} is pending for {student} ({class}). Kindly submit the remaining dues at the school office. Thank you.'
   }
   const amount = `Rs. ${Math.round(student.total_pending ?? 0).toLocaleString()}`
   return `Dear Parent, ${amount} is pending for ${student.name} (${student.class_name}). Kindly submit the remaining dues at the school office. Thank you.`
@@ -265,6 +270,9 @@ export function NotificationCenterPage() {
         <TextField label="Message" size="small" multiline minRows={4} value={body}
           onChange={(e) => setBody(e.target.value)} inputProps={{ maxLength: 2000 }}
           helperText="You can freely edit this message before sending." />
+        <Typography variant="caption" color="text.secondary">
+          Short-codes (filled per student on a single-student send): {SHORT_CODES}
+        </Typography>
         <Box>
           <Button variant="contained" disabled={!canSend || sendMutation.isPending} onClick={() => sendMutation.mutate()}>
             {sendMutation.isPending ? 'Sending…' : 'Send Notification'}

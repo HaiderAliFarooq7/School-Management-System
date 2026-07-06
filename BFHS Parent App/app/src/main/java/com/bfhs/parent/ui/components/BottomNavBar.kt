@@ -50,7 +50,8 @@ fun BfhsBottomNavBar(
             .padding(bottom = Dimens.BottomNavMarginB)
             .fillMaxWidth()
             .height(Dimens.BottomNavHeight)
-            .background(BfhsColors.GlassFillStrong, shape)
+            // Near-opaque so scrolling content doesn't bleed through the bar.
+            .background(BfhsColors.NavBarSurface, shape)
             .border(1.dp, Color(0x29FFFFFF), shape),
         horizontalArrangement = Arrangement.SpaceAround,
         verticalAlignment = Alignment.CenterVertically

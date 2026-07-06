@@ -372,6 +372,8 @@ private fun FeeRow(fee: MonthlyFee) {
 
 @Composable
 private fun ExtraChargesCard(charges: List<ExtraCharge>) {
+    // Only pending (unpaid) charges are shown — paid ones are hidden.
+    val pending = charges.filter { it.status == PaymentStatus.UNPAID }
     GlassCard(modifier = Modifier.fillMaxWidth()) {
         Column {
             Text(
@@ -380,16 +382,16 @@ private fun ExtraChargesCard(charges: List<ExtraCharge>) {
                 style = MaterialTheme.typography.titleSmall
             )
             Spacer(Modifier.height(8.dp))
-            if (charges.isEmpty()) {
+            if (pending.isEmpty()) {
                 Text(
                     text = stringResource(R.string.detail_charges_none),
                     color = BfhsColors.TextSecondaryDim,
                     style = MaterialTheme.typography.bodyMedium
                 )
             } else {
-                charges.forEachIndexed { i, charge ->
+                pending.forEachIndexed { i, charge ->
                     ChargeRow(charge)
-                    if (i < charges.size - 1) HorizontalDivider(color = BfhsColors.Divider, thickness = 1.dp)
+                    if (i < pending.size - 1) HorizontalDivider(color = BfhsColors.Divider, thickness = 1.dp)
                 }
             }
         }
