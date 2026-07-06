@@ -12,6 +12,7 @@ object BfhsColors {
     // Base surfaces
     val BackgroundBase = Color(0xFF180508)
     val DialogSurface = Color(0xFF2A0910)   // opaque dark maroon for dialogs
+    val NavBarSurface = Color(0xF2200A0E)   // near-opaque floating nav (no see-through)
 
     // Gradient stops
     val HeaderGradientStart = Color(0xFF6E1B26)

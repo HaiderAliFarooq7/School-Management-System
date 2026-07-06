@@ -186,16 +186,12 @@ fun BfhsNavGraph(
         LaunchedEffect(pendingNotificationType, currentRoute) {
             val type = pendingNotificationType
             if (type != null && currentRoute == Routes.DASHBOARD) {
-                val studentId = pendingNotificationStudentId
                 pendingNotificationType = null
                 pendingNotificationStudentId = null
-                when (type) {
-                    "absent", "attendance" ->
-                        studentId?.let { navController.navigate(Routes.attendance(it)) }
-                    "fee", "fee_reminder" ->
-                        studentId?.let { navController.navigate(Routes.fee(it)) }
-                    else -> navController.navigateToTab(Routes.NOTIFICATIONS)
-                }
+                // Always open the Notifications tab (a tab-root with the bottom
+                // nav) so the parent can read the message and still reach Home —
+                // no dead-end student screen to get stuck on.
+                navController.navigateToTab(Routes.NOTIFICATIONS)
             }
         }
     }

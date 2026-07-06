@@ -73,6 +73,43 @@ def _parents_for_class(db: Session, class_name: str) -> list[ParentAccount]:
     return [p for p in _all_active_parents(db) if normalize_mobile(p.mobile_number) in wanted]
 
 
+def student_dues(db: Session, student_id: int) -> int:
+    """Total remaining dues for a student: unpaid fee-voucher balances plus
+    unpaid extra-charge balances."""
+    from app.models.extra_charge import ExtraCharge
+    from app.models.fee_voucher import FeeVoucher
+
+    vouchers = db.execute(
+        select(FeeVoucher).where(FeeVoucher.student_id == student_id)
+    ).scalars().all()
+    charges = db.execute(
+        select(ExtraCharge).where(ExtraCharge.student_id == student_id)
+    ).scalars().all()
+    total = sum(v.remaining for v in vouchers) + sum(float(c.remaining_amount) for c in charges)
+    return int(round(total))
+
+
+def render_template(text: str, student: Student, dues: int) -> str:
+    """Replace message short-codes with the student's real data. Accepts both
+    ``{code}`` and ``[code]`` forms so any template text renders correctly:
+
+        {student}/{name}, {class}, {father}, {amount}/{dues}, {reg}, {date}
+    """
+    from datetime import date as _date
+
+    amount = f"Rs. {dues:,}"
+    values = {
+        "student": student.name, "name": student.name,
+        "class": student.class_name, "father": student.father_name or "",
+        "amount": amount, "dues": amount,
+        "reg": student.registration_no or "",
+        "date": _date.today().strftime("%d %b %Y"),
+    }
+    for k, v in values.items():
+        text = text.replace("{" + k + "}", v).replace("[" + k + "]", v)
+    return text
+
+
 def dispatch_notification(
     db: Session,
     *,
@@ -104,6 +141,14 @@ def dispatch_notification(
         raise ValueError(f"Unknown audience: {audience}")
 
     student_id = student.student_id if student is not None else None
+
+    # Fill short-codes ({student}, {class}, {amount}, {father}, {date}) with the
+    # student's real data for a single-student send, so fee reminders and absent
+    # alerts never go out with literal placeholders like "[amount]".
+    if student is not None:
+        dues = student_dues(db, student.student_id)
+        title = render_template(title, student, dues)
+        body = render_template(body, student, dues)
 
     parent_ids = [p.parent_id for p in parents]
     for pid in parent_ids:
