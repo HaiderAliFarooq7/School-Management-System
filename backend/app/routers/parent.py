@@ -294,30 +294,28 @@ def get_fees(
     parent: CurrentParent = Depends(get_current_parent),
     db: Session = Depends(get_db),
 ):
+    """Parents only ever need to know what's still owed — fully paid months
+    are never returned here (there is nothing actionable in them), and the
+    amount shown is always the remaining/pending balance, never the
+    voucher's original total (a Partial voucher's total is misleading once
+    part of it has been paid)."""
     _require_own_student(db, parent, student_id)
     vouchers = db.execute(
         select(FeeVoucher)
-        .where(FeeVoucher.student_id == student_id)
+        .where(FeeVoucher.student_id == student_id, FeeVoucher.status != "Paid")
         .order_by(FeeVoucher.fee_month_sort.desc())
     ).scalars().all()
 
     current: MonthlyFeeOut | None = None
     history: list[MonthlyFeeOut] = []
     for v in vouchers:
-        is_paid = v.status == "Paid"
-        if current is None and not is_paid:
-            current = MonthlyFeeOut(
-                month=v.fee_month, amount=int(round(v.remaining)), status="Unpaid", due_date=None
-            )
+        entry = MonthlyFeeOut(
+            month=v.fee_month, amount=int(round(v.remaining)), status="Unpaid", due_date=None
+        )
+        if current is None:
+            current = entry
         else:
-            history.append(
-                MonthlyFeeOut(
-                    month=v.fee_month,
-                    amount=int(round(float(v.total_amount))),
-                    status="Paid" if is_paid else "Unpaid",
-                    due_date=None,
-                )
-            )
+            history.append(entry)
     return FeeResponse(current=current, history=history)
 
 
@@ -327,23 +325,25 @@ def get_extra_charges(
     parent: CurrentParent = Depends(get_current_parent),
     db: Session = Depends(get_db),
 ):
+    """Only charges still owed are shown — same reasoning as fees above."""
     _require_own_student(db, parent, student_id)
     charges = db.execute(
         select(ExtraCharge)
-        .where(ExtraCharge.student_id == student_id)
+        .where(ExtraCharge.student_id == student_id, ExtraCharge.status != "Paid")
         .order_by(ExtraCharge.created_at.desc())
     ).scalars().all()
     out = []
     for c in charges:
-        paid = c.status == "Paid" or float(c.remaining_amount) <= 0
-        label = f"{'Paid' if paid else 'Due'} {c.created_at:%d %b %Y}" if c.created_at else ""
+        if float(c.remaining_amount) <= 0:
+            continue
+        label = f"Due {c.created_at:%d %b %Y}" if c.created_at else "Due"
         out.append(
             ExtraChargeOut(
                 id=str(c.charge_id),
                 title=c.description,
-                amount=int(round(float(c.amount))),
+                amount=int(round(float(c.remaining_amount))),
                 date_label=label,
-                status="Paid" if paid else "Unpaid",
+                status="Unpaid",
             )
         )
     return out

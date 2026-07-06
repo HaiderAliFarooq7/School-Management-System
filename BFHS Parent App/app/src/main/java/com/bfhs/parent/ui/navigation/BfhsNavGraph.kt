@@ -13,6 +13,9 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -50,6 +53,14 @@ fun BfhsNavGraph(
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
+
+    // Consumed exactly once: without this, re-entering the Dashboard route
+    // (e.g. pressing back from the deep-linked screen) would re-run the
+    // LaunchedEffect below forever, since its keys (type, DASHBOARD) become
+    // identical again — trapping the user in a back-navigation loop that
+    // never reaches Home.
+    var pendingNotificationType by remember { mutableStateOf(notificationType) }
+    var pendingNotificationStudentId by remember { mutableStateOf(notificationStudentId) }
 
     // Background fills the whole screen (behind the system bars); the content is
     // then inset so no top bar hides under the clock/notch and the floating nav
@@ -169,14 +180,20 @@ fun BfhsNavGraph(
             )
         }
 
-        // FCM deep link: once we land past splash, route to the right screen.
-        LaunchedEffect(notificationType, currentRoute) {
-            if (notificationType != null && currentRoute == Routes.DASHBOARD) {
-                when (notificationType) {
+        // FCM deep link: once we land past splash, route to the right screen —
+        // then immediately consume it, so backing out to Dashboard afterwards
+        // behaves like a normal Home screen instead of re-triggering the jump.
+        LaunchedEffect(pendingNotificationType, currentRoute) {
+            val type = pendingNotificationType
+            if (type != null && currentRoute == Routes.DASHBOARD) {
+                val studentId = pendingNotificationStudentId
+                pendingNotificationType = null
+                pendingNotificationStudentId = null
+                when (type) {
                     "absent", "attendance" ->
-                        notificationStudentId?.let { navController.navigate(Routes.attendance(it)) }
+                        studentId?.let { navController.navigate(Routes.attendance(it)) }
                     "fee", "fee_reminder" ->
-                        notificationStudentId?.let { navController.navigate(Routes.fee(it)) }
+                        studentId?.let { navController.navigate(Routes.fee(it)) }
                     else -> navController.navigateToTab(Routes.NOTIFICATIONS)
                 }
             }

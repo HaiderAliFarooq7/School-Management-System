@@ -6,8 +6,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Call
+import androidx.compose.material.icons.outlined.School
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -28,8 +30,10 @@ import com.bfhs.parent.ui.theme.BfhsColors
 import com.bfhs.parent.ui.viewmodel.SettingsViewModel
 
 /**
- * About School — name, description paragraph, then a glass card with
- * Established / Website rows.
+ * About School — only the two fields the school actually maintains (name and
+ * phone), always loaded fresh from that parent's own school. No fabricated
+ * tagline/principal/established/email/address/website — those aren't stored
+ * anywhere and only showed up blank.
  */
 @Composable
 fun AboutSchoolScreen(
@@ -49,21 +53,25 @@ fun AboutSchoolScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .verticalScroll(rememberScrollState())
                         .padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 24.dp)
                 ) {
-                    Text(
-                        text = profile.name,
-                        color = BfhsColors.TextPrimary,
-                        fontSize = 17.sp,
-                        fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
-                    Text(
-                        text = profile.about,
-                        color = BfhsColors.TextBody,
-                        style = MaterialTheme.typography.bodyLarge.copy(lineHeight = 23.sp)
-                    )
+                    Row(
+                        modifier = Modifier.padding(bottom = 4.dp)
+                    ) {
+                        Icon(
+                            Icons.Outlined.School,
+                            contentDescription = null,
+                            tint = BfhsColors.AccentGold,
+                            modifier = Modifier.padding(top = 2.dp)
+                        )
+                        Text(
+                            text = profile.name,
+                            color = BfhsColors.TextPrimary,
+                            fontSize = 17.sp,
+                            fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                            modifier = Modifier.padding(start = 10.dp)
+                        )
+                    }
                     GlassCard(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -74,35 +82,24 @@ fun AboutSchoolScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(vertical = 6.dp)
+                                    .padding(vertical = 8.dp)
                             ) {
-                                Text(
-                                    text = stringResource(R.string.school_established),
-                                    color = BfhsColors.TextSecondaryDim,
-                                    style = MaterialTheme.typography.bodyMedium
+                                Icon(
+                                    Icons.Outlined.Call,
+                                    contentDescription = null,
+                                    tint = BfhsColors.AccentGold,
+                                    modifier = Modifier.padding(end = 10.dp)
                                 )
                                 Text(
-                                    text = profile.established,
+                                    text = stringResource(R.string.school_phone),
+                                    color = BfhsColors.TextSecondaryDim,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Text(
+                                    text = profile.phone,
                                     color = BfhsColors.TextPrimary,
-                                    fontSize = 13.sp,
-                                    fontWeight = androidx.compose.ui.text.font.FontWeight.Medium
-                                )
-                            }
-                            Row(
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 6.dp)
-                            ) {
-                                Text(
-                                    text = stringResource(R.string.school_website),
-                                    color = BfhsColors.TextSecondaryDim,
-                                    style = MaterialTheme.typography.bodyMedium
-                                )
-                                Text(
-                                    text = profile.website,
-                                    color = BfhsColors.AccentGold,
-                                    fontSize = 13.sp,
+                                    fontSize = 13.5.sp,
                                     fontWeight = androidx.compose.ui.text.font.FontWeight.Medium
                                 )
                             }

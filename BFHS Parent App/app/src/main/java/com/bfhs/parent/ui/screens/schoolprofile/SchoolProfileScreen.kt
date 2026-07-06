@@ -8,16 +8,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Call
-import androidx.compose.material.icons.outlined.LocationOn
-import androidx.compose.material.icons.outlined.MailOutline
-import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.School
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -43,8 +36,11 @@ import com.bfhs.parent.ui.theme.Dimens
 import com.bfhs.parent.ui.viewmodel.SettingsViewModel
 
 /**
- * School Profile — centered icon tile + name + tagline header, then a single
- * glass card of info rows: Principal, Established, Phone, Email, Address.
+ * School Profile — centered icon tile + name header, then a single glass
+ * card with just the Phone row. Only name and phone are real, school-
+ * maintained data (loaded fresh for the parent's own school each time);
+ * every other field this screen used to show (principal, established,
+ * email, address, tagline) was never populated and only rendered blank.
  */
 @Composable
 fun SchoolProfileScreen(
@@ -64,7 +60,6 @@ fun SchoolProfileScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .verticalScroll(rememberScrollState())
                         .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 24.dp)
                 ) {
                     Column(
@@ -86,28 +81,12 @@ fun SchoolProfileScreen(
                             fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
                             modifier = Modifier.padding(top = 12.dp)
                         )
-                        Text(
-                            text = profile.tagline,
-                            color = BfhsColors.TextSecondaryDim,
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.padding(top = 2.dp)
-                        )
                     }
                     GlassCard(
                         modifier = Modifier.fillMaxWidth(),
                         contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp)
                     ) {
-                        Column {
-                            InfoRow(Icons.Outlined.Person, stringResource(R.string.school_principal), profile.principal)
-                            HorizontalDivider(color = BfhsColors.Divider, thickness = 1.dp)
-                            InfoRow(Icons.Outlined.CalendarMonth, stringResource(R.string.school_established), profile.established)
-                            HorizontalDivider(color = BfhsColors.Divider, thickness = 1.dp)
-                            InfoRow(Icons.Outlined.Call, stringResource(R.string.school_phone), profile.phone)
-                            HorizontalDivider(color = BfhsColors.Divider, thickness = 1.dp)
-                            InfoRow(Icons.Outlined.MailOutline, stringResource(R.string.school_email), profile.email)
-                            HorizontalDivider(color = BfhsColors.Divider, thickness = 1.dp)
-                            InfoRow(Icons.Outlined.LocationOn, stringResource(R.string.school_address), profile.address)
-                        }
+                        InfoRow(Icons.Outlined.Call, stringResource(R.string.school_phone), profile.phone)
                     }
                 }
             }

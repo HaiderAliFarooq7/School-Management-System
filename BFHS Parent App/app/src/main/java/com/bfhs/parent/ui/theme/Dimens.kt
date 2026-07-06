@@ -40,6 +40,9 @@ object Dimens {
     val BottomNavMarginH = 20.dp
     val BottomNavMarginB = 24.dp
 
-    // List content bottom padding on tab-root screens (clears the floating nav)
-    val TabContentBottomPadding = 90.dp
+    // List content bottom padding on tab-root screens (clears the floating nav).
+    // Must exceed BottomNavHeight + BottomNavMarginB (64 + 24 = 88dp) by a
+    // comfortable margin — 90dp left almost no slack and let list rows peek
+    // out from behind the pill (and the system nav bar) on several devices.
+    val TabContentBottomPadding = 132.dp
 }
