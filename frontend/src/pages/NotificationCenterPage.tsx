@@ -271,7 +271,8 @@ export function NotificationCenterPage() {
           onChange={(e) => setBody(e.target.value)} inputProps={{ maxLength: 2000 }}
           helperText="You can freely edit this message before sending." />
         <Typography variant="caption" color="text.secondary">
-          Short-codes (filled per student on a single-student send): {SHORT_CODES}
+          Short-codes are replaced with each child's real details — works for one student,
+          a class, or the whole school (every parent gets their own child's message): {SHORT_CODES}
         </Typography>
         <Box>
           <Button variant="contained" disabled={!canSend || sendMutation.isPending} onClick={() => sendMutation.mutate()}>
