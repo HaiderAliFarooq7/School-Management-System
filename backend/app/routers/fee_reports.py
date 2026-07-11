@@ -19,6 +19,10 @@ from app.services.fee_status import aggregate_fee_status
 router = APIRouter(
     prefix="/api/fee-reports",
     tags=["fee_reports"],
+    # Router stays open to Accountant so the per-student balance-sheet (used by
+    # the Student Fee ledger) keeps working; the actual Fee Reports pages
+    # (pending / collection / class-summary / analytics) are locked to Admin
+    # individually below.
     dependencies=[Depends(require_role("Admin", "Accountant"))],
 )
 require_admin = Depends(require_role("Admin"))
@@ -111,7 +115,7 @@ def _gather_pending_report(db: Session, class_names: str, status_filter: str, du
     return rows
 
 
-@router.get("/pending")
+@router.get("/pending", dependencies=[require_admin])
 def get_pending_report(
     class_names: str = "",
     status_filter: str = "",
@@ -123,7 +127,7 @@ def get_pending_report(
     return _gather_pending_report(db, class_names, status_filter, due_day)
 
 
-@router.get("/pending/pdf")
+@router.get("/pending/pdf", dependencies=[require_admin])
 def get_pending_report_pdf(
     class_names: str = "",
     status_filter: str = "",
@@ -150,7 +154,7 @@ def get_pending_report_pdf(
     )
 
 
-@router.get("/pending/xlsx")
+@router.get("/pending/xlsx", dependencies=[require_admin])
 def get_pending_report_xlsx(
     class_names: str = "",
     status_filter: str = "",
@@ -183,7 +187,7 @@ def get_pending_report_xlsx(
     )
 
 
-@router.get("/monthly-collection")
+@router.get("/monthly-collection", dependencies=[require_admin])
 def get_monthly_collection(year: int, month: int, class_name: str = "", db: Session = Depends(get_db)):
     fee_month_sort = f"{year:04d}-{month:02d}"
 
@@ -256,7 +260,7 @@ def get_monthly_collection(year: int, month: int, class_name: str = "", db: Sess
     }
 
 
-@router.get("/class-summary")
+@router.get("/class-summary", dependencies=[require_admin])
 def get_class_fee_summary(class_name: str, year: int, month: int, db: Session = Depends(get_db)):
     fee_month_sort = f"{year:04d}-{month:02d}"
     rows = db.execute(
