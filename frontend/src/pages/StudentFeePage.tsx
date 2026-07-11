@@ -6,7 +6,7 @@ import {
   TableCell, TableContainer, TableHead, TableRow, TextField, Typography,
 } from '@mui/material'
 import { getBalanceSheet } from '../api/feeReports'
-import { getStudent, listStudents } from '../api/students'
+import { getStudent, getSiblings, listStudents, type Sibling } from '../api/students'
 import { downloadFile } from '../api/client'
 import { applyVoucherDiscount, deleteVoucher, editVoucher, generateVoucher, payVoucher } from '../api/feeVouchers'
 import { addCharge, applyChargeDiscount, deleteCharge, editCharge, payCharge } from '../api/extraCharges'
@@ -200,7 +200,8 @@ function StudentLedger({ studentId }: { studentId: number }) {
   const defaultGenAmount = grades?.find((g) => g.class_name === student.class_name)?.fee_amount ?? 0
 
   return (
-    <Box>
+    <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 3, alignItems: 'flex-start' }}>
+      <Box sx={{ flex: 1, minWidth: 0, width: '100%' }}>
       <Button sx={{ mb: 1 }} onClick={() => navigate('/fees/student')}>← Search Another Student</Button>
       <Typography variant="h5" gutterBottom>
         {student.name} <Typography component="span" color="text.secondary">({student.registration_no})</Typography>
@@ -491,7 +492,64 @@ function StudentLedger({ studentId }: { studentId: number }) {
           }
         }}
       />
+      </Box>
 
+      <SiblingsPanel studentId={studentId} onOpen={(id) => navigate(`/fees/student/${id}`)} />
     </Box>
+  )
+}
+
+/** Right-side dark card listing the student's siblings (same phone number) with
+ * their pending dues — click any card to open that child's fee page. On phones
+ * it drops below the main content. */
+function SiblingsPanel({ studentId, onOpen }: { studentId: number; onOpen: (id: number) => void }) {
+  const { data: siblings } = useQuery({
+    queryKey: ['siblings', studentId],
+    queryFn: () => getSiblings(studentId),
+  })
+  if (!siblings || siblings.length === 0) return null
+
+  return (
+    <Card
+      sx={{
+        width: { xs: '100%', md: 300 },
+        flexShrink: 0,
+        bgcolor: '#1b2028',
+        color: 'grey.100',
+        position: { md: 'sticky' },
+        top: { md: 88 },
+      }}
+    >
+      <CardContent>
+        <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1.5 }}>
+          Siblings ({siblings.length})
+        </Typography>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+          {siblings.map((s: Sibling) => (
+            <Box
+              key={s.student_id}
+              onClick={() => onOpen(s.student_id)}
+              sx={{
+                p: 1.5,
+                borderRadius: 1.5,
+                bgcolor: 'rgba(255,255,255,0.06)',
+                cursor: 'pointer',
+                transition: 'background-color 0.15s',
+                '&:hover': { bgcolor: 'rgba(255,255,255,0.12)' },
+              }}
+            >
+              <Typography fontWeight={600} noWrap>{s.name}</Typography>
+              <Typography variant="body2" sx={{ color: 'grey.400' }}>Class: {s.class_name}</Typography>
+              <Typography
+                variant="body2"
+                sx={{ mt: 0.5, fontWeight: 700, color: s.total_pending > 0 ? '#ff6b6b' : '#66bb6a' }}
+              >
+                Pending: Rs. {Math.round(s.total_pending).toLocaleString()}
+              </Typography>
+            </Box>
+          ))}
+        </Box>
+      </CardContent>
+    </Card>
   )
 }
