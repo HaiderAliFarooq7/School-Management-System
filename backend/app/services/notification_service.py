@@ -18,6 +18,8 @@ commits.
 """
 from __future__ import annotations
 
+import re
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -110,6 +112,52 @@ def render_template(text: str, student: Student, dues: int) -> str:
     return text
 
 
+_CODE_RE = re.compile(r"[\{\[](student|name|class|father|amount|dues|reg|date)[\}\]]", re.IGNORECASE)
+
+
+def _has_codes(*texts: str) -> bool:
+    """True if any message text still contains a per-student short-code."""
+    return any(_CODE_RE.search(t or "") for t in texts)
+
+
+def _students_in_scope(
+    db: Session, audience: str, student: Student | None, class_name: str | None
+) -> list[Student]:
+    if audience == AUDIENCE_STUDENT:
+        return [student] if student is not None else []
+    if audience == AUDIENCE_CLASS:
+        return db.execute(
+            select(Student).where(Student.class_name == class_name, Student.status == "Active")
+        ).scalars().all()
+    return db.execute(select(Student).where(Student.status == "Active")).scalars().all()
+
+
+def _push_to_parents(
+    db: Session, parent_ids: list[int], *, notif_type: str, title: str, body: str, student_id: int | None
+) -> tuple[int, int]:
+    if not parent_ids:
+        return (0, 0)
+    device_rows = db.execute(
+        select(ParentDevice).where(
+            ParentDevice.parent_id.in_(parent_ids),
+            ParentDevice.is_active.is_(True),
+        )
+    ).scalars().all()
+    tokens = [d.fcm_token for d in device_rows]
+    data = {"type": notif_type}
+    if student_id is not None:
+        data["student_id"] = str(student_id)
+    delivered, failed, invalid = firebase_service.send_to_tokens(
+        tokens, title=title, body=body, data=data, channel_id=_CHANNEL_FOR_TYPE.get(notif_type)
+    )
+    if invalid:
+        invalid_set = set(invalid)
+        for d in device_rows:
+            if d.fcm_token in invalid_set:
+                d.is_active = False
+    return (delivered, failed)
+
+
 def dispatch_notification(
     db: Session,
     *,
@@ -127,73 +175,76 @@ def dispatch_notification(
     but does not commit, so a send can be part of a larger transaction (e.g.
     marking attendance).
     """
-    if audience == AUDIENCE_STUDENT:
-        if student is None:
-            raise ValueError("student is required for a student-audience notification")
-        parents = _parents_for_student(db, student)
-    elif audience == AUDIENCE_CLASS:
-        if not class_name:
-            raise ValueError("class_name is required for a class-audience notification")
-        parents = _parents_for_class(db, class_name)
-    elif audience == AUDIENCE_SCHOOL:
-        parents = _all_active_parents(db)
-    else:
+    if audience == AUDIENCE_STUDENT and student is None:
+        raise ValueError("student is required for a student-audience notification")
+    if audience == AUDIENCE_CLASS and not class_name:
+        raise ValueError("class_name is required for a class-audience notification")
+    if audience not in (AUDIENCE_STUDENT, AUDIENCE_CLASS, AUDIENCE_SCHOOL):
         raise ValueError(f"Unknown audience: {audience}")
 
-    student_id = student.student_id if student is not None else None
+    recipients = delivered = failed = 0
 
-    # Fill short-codes ({student}, {class}, {amount}, {father}, {date}) with the
-    # student's real data for a single-student send, so fee reminders and absent
-    # alerts never go out with literal placeholders like "[amount]".
-    if student is not None:
-        dues = student_dues(db, student.student_id)
-        title = render_template(title, student, dues)
-        body = render_template(body, student, dues)
-
-    parent_ids = [p.parent_id for p in parents]
-    for pid in parent_ids:
-        db.add(
-            ParentNotification(
-                parent_id=pid,
-                student_id=student_id,
-                notif_type=notif_type,
-                title=title,
-                body=body,
+    if _has_codes(title, body):
+        # Per-student personalization: each parent gets a message filled with
+        # THEIR child's name / class / dues — so a fee reminder to a class or the
+        # whole school reaches every parent with their own child's details, not a
+        # generic "[amount] pending for [student]". A parent with two children in
+        # scope gets one personalized message per child.
+        for s in _students_in_scope(db, audience, student, class_name):
+            parents = _parents_for_student(db, s)
+            if not parents:
+                continue
+            dues = student_dues(db, s.student_id)
+            r_title = render_template(title, s, dues)
+            r_body = render_template(body, s, dues)
+            parent_ids = [p.parent_id for p in parents]
+            for pid in parent_ids:
+                db.add(
+                    ParentNotification(
+                        parent_id=pid, student_id=s.student_id, notif_type=notif_type,
+                        title=r_title, body=r_body,
+                    )
+                )
+            db.flush()
+            recipients += len(parent_ids)
+            d, f = _push_to_parents(
+                db, parent_ids, notif_type=notif_type, title=r_title, body=r_body,
+                student_id=s.student_id,
             )
-        )
-    db.flush()
-
-    delivered = failed = 0
-    if parent_ids:
-        device_rows = db.execute(
-            select(ParentDevice).where(
-                ParentDevice.parent_id.in_(parent_ids),
-                ParentDevice.is_active.is_(True),
+            delivered += d
+            failed += f
+    else:
+        # No short-codes: one generic copy to every parent in the audience.
+        if audience == AUDIENCE_STUDENT:
+            parents = _parents_for_student(db, student)
+        elif audience == AUDIENCE_CLASS:
+            parents = _parents_for_class(db, class_name)
+        else:
+            parents = _all_active_parents(db)
+        student_id = student.student_id if student is not None else None
+        parent_ids = [p.parent_id for p in parents]
+        for pid in parent_ids:
+            db.add(
+                ParentNotification(
+                    parent_id=pid, student_id=student_id, notif_type=notif_type,
+                    title=title, body=body,
+                )
             )
-        ).scalars().all()
-        tokens = [d.fcm_token for d in device_rows]
-        data = {"type": notif_type}
-        if student_id is not None:
-            data["student_id"] = str(student_id)
-        delivered, failed, invalid = firebase_service.send_to_tokens(
-            tokens, title=title, body=body, data=data,
-            channel_id=_CHANNEL_FOR_TYPE.get(notif_type),
+        db.flush()
+        recipients = len(parent_ids)
+        delivered, failed = _push_to_parents(
+            db, parent_ids, notif_type=notif_type, title=title, body=body, student_id=student_id
         )
-        if invalid:
-            invalid_set = set(invalid)
-            for d in device_rows:
-                if d.fcm_token in invalid_set:
-                    d.is_active = False
 
     log = NotificationLog(
         notif_type=notif_type,
         audience=audience,
         title=title,
         body=body,
-        student_id=student_id,
+        student_id=student.student_id if student is not None else None,
         class_name=class_name,
         sent_by_user_id=sent_by_user_id,
-        recipients_count=len(parent_ids),
+        recipients_count=recipients,
         delivered_count=delivered,
         failed_count=failed,
     )

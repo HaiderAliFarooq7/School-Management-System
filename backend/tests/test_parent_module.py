@@ -184,6 +184,33 @@ def test_admin_announcement_reaches_parent_inbox(client, admin_headers, parent_w
     _cleanup_log(log_id)
 
 
+def test_class_fee_reminder_is_personalized(client, admin_headers, parent_with_children):
+    """A class/school fee reminder with short-codes must reach each parent with
+    their own child's real name/class/amount filled in — not literal
+    '{amount} ... {student}' placeholders."""
+    sent = client.post(
+        "/api/admin/notifications/send", headers=admin_headers,
+        json={
+            "notif_type": "fee_reminder", "audience": "class", "class_name": TEST_CLASS,
+            "title": "Fee Reminder",
+            "body": "Dear Parent, {amount} is pending for {student} ({class}). Kindly clear the dues.",
+        },
+    )
+    assert sent.status_code == 200, sent.text
+    log_id = sent.json()["log_id"]
+
+    token = _parent_token(client, PARENT_MOBILE, PARENT_MOBILE)
+    inbox = client.get("/api/parent/notifications", headers={"Authorization": f"Bearer {token}"})
+    assert inbox.status_code == 200
+    bodies = [n["body"] for n in inbox.json()]
+    # A real child's name appears and no short-code braces/brackets remain.
+    assert any(
+        "Parent Child" in b and "{" not in b and "[" not in b and TEST_CLASS in b
+        for b in bodies
+    ), bodies
+    _cleanup_log(log_id)
+
+
 def _cleanup_log(log_id: int) -> None:
     db = SessionLocal()
     try:
