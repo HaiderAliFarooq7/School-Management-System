@@ -69,7 +69,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Promote Students', path: '/students/promote', icon: <TrendingUpIcon />, roles: ['Admin'] },
   { label: 'Student Fee', path: '/fees/student', icon: <PaidIcon />, roles: ['Admin', 'Accountant'] },
   { label: 'Fee Vouchers', path: '/fees/vouchers', icon: <ReceiptIcon />, roles: ['Admin', 'Accountant'] },
-  { label: 'Fee Reports', path: '/fees/reports', icon: <AssessmentIcon />, roles: ['Admin', 'Accountant'] },
+  { label: 'Fee Reports', path: '/fees/reports', icon: <AssessmentIcon />, roles: ['Admin'] },
   { label: 'Extra Charges', path: '/charges', icon: <RequestQuoteIcon />, roles: ['Admin', 'Accountant'] },
   { label: 'Attendance', path: '/attendance', icon: <EventAvailableIcon />, roles: ['Admin', 'Teacher'] },
   { label: 'Fee Status', path: '/fees/status', icon: <FactCheckIcon />, roles: ['Teacher'] },

@@ -85,11 +85,11 @@ export default function App() {
                       <Route path="/fees/student" element={s(<StudentFeePage />)} />
                       <Route path="/fees/student/:studentId" element={s(<StudentFeePage />)} />
                       <Route path="/fees/vouchers" element={s(<FeeVouchersPage />)} />
-                      <Route path="/fees/reports" element={s(<FeeReportsPage />)} />
                       <Route path="/charges" element={s(<ExtraChargesPage />)} />
                     </Route>
 
                     <Route element={<ProtectedRoute allowedRoles={['Admin']} />}>
+                      <Route path="/fees/reports" element={s(<FeeReportsPage />)} />
                       <Route path="/students/promote" element={s(<PromoteStudentsPage />)} />
                       <Route path="/settings" element={s(<SchoolSettingsPage />)} />
                       <Route path="/users" element={s(<UserManagementPage />)} />
