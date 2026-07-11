@@ -77,6 +77,19 @@ export async function getStudent(studentId: number): Promise<Student> {
   return data
 }
 
+export interface Sibling {
+  student_id: number
+  name: string
+  class_name: string
+  total_pending: number
+}
+
+/** Other students sharing this student's phone number, with their total pending dues. */
+export async function getSiblings(studentId: number): Promise<Sibling[]> {
+  const { data } = await apiClient.get<Sibling[]>(`/students/${studentId}/siblings`)
+  return data
+}
+
 export async function setStudentStatus(studentId: number, newStatus: string): Promise<Student> {
   const { data } = await apiClient.patch<Student>(
     `/students/${studentId}/status`,

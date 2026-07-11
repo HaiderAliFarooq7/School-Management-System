@@ -5,6 +5,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 import io
+import re
 from datetime import datetime
 
 import openpyxl
@@ -61,6 +62,52 @@ def _fee_status(db: Session, student_id: int) -> str:
         select(FeeVoucher).where(FeeVoucher.student_id == student_id)
     ).scalars().all()
     return aggregate_fee_status(vouchers)
+
+
+def _norm_phone(p: str | None) -> str:
+    """Digits-only form of a phone number, keeping the last 10 (national) digits
+    so different formattings of the same number match."""
+    digits = re.sub(r"\D", "", p or "")
+    return digits[-10:] if len(digits) >= 10 else digits
+
+
+class SiblingOut(BaseModel):
+    student_id: int
+    name: str
+    class_name: str
+    total_pending: float
+
+
+@router.get("/{student_id}/siblings", response_model=list[SiblingOut])
+def get_siblings(
+    student_id: int,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Other students sharing this student's phone number (i.e. siblings), each
+    with their total remaining dues (pending fee vouchers + extra charges)."""
+    student = db.get(Student, student_id)
+    if student is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Student not found")
+    core = _norm_phone(student.phone)
+    if not core:
+        return []
+    others = db.execute(
+        select(Student).where(Student.student_id != student_id)
+    ).scalars().all()
+    siblings = [s for s in others if _norm_phone(s.phone) == core]
+    if not siblings:
+        return []
+    summaries = fee_summaries_for_students(db, [s.student_id for s in siblings])
+    return [
+        SiblingOut(
+            student_id=s.student_id,
+            name=s.name,
+            class_name=s.class_name,
+            total_pending=float(summaries[s.student_id][1]),
+        )
+        for s in siblings
+    ]
 
 
 def _total_pending(db: Session, student_id: int) -> float:
