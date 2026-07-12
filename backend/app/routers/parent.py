@@ -175,6 +175,12 @@ def parent_login(payload: ParentLoginRequest, mdb: Session = Depends(get_master_
         parent_name = parent.full_name
         must_change = parent.must_change_password
         stored_mobile = parent.mobile_number
+        # If the account has no name, greet the parent by a linked child's
+        # father name instead of leaving the app's greeting blank.
+        if not (parent_name or "").strip():
+            linked = find_students_for_mobile(db, stored_mobile)
+            if linked:
+                parent_name = linked[0].father_name
     finally:
         db.close()
 
