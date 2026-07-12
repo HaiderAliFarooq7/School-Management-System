@@ -10,7 +10,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Call
+import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material.icons.outlined.School
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -86,7 +88,27 @@ fun SchoolProfileScreen(
                         modifier = Modifier.fillMaxWidth(),
                         contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp)
                     ) {
-                        InfoRow(Icons.Outlined.Call, stringResource(R.string.school_phone), profile.phone)
+                        Column {
+                            val hasPhone = profile.phone.isNotBlank()
+                            val hasAddress = profile.address.isNotBlank()
+                            if (hasPhone) {
+                                InfoRow(Icons.Outlined.Call, stringResource(R.string.school_phone), profile.phone)
+                            }
+                            if (hasPhone && hasAddress) {
+                                HorizontalDivider(color = BfhsColors.Divider, thickness = 1.dp)
+                            }
+                            if (hasAddress) {
+                                InfoRow(Icons.Outlined.LocationOn, stringResource(R.string.school_address), profile.address)
+                            }
+                            if (!hasPhone && !hasAddress) {
+                                Text(
+                                    text = stringResource(R.string.school_no_contact),
+                                    color = BfhsColors.TextSecondaryDim,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    modifier = Modifier.padding(14.dp)
+                                )
+                            }
+                        }
                     }
                 }
             }

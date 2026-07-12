@@ -65,6 +65,18 @@ fun DashboardScreen(
     val parent by viewModel.parent.collectAsState()
     val hasUnread by viewModel.hasUnread.collectAsState()
 
+    // Greeting shows the parent's real name — never the mobile number. If the
+    // account has no name (or only digits), fall back to the child's father
+    // name, then a generic label.
+    val parentName = parent?.name?.trim().orEmpty()
+    val greetingName = if (parentName.isNotEmpty() && parentName.any { it.isLetter() }) {
+        parentName
+    } else {
+        (students as? Resource.Success)?.data?.firstOrNull()?.fatherName?.trim()
+            ?.takeIf { it.isNotEmpty() }
+            ?: stringResource(R.string.dashboard_default_parent)
+    }
+
     Column(modifier = Modifier.fillMaxSize()) {
         // Gradient header
         Row(
@@ -85,7 +97,7 @@ fun DashboardScreen(
                     style = MaterialTheme.typography.bodySmall
                 )
                 Text(
-                    text = parent?.name.orEmpty(),
+                    text = greetingName,
                     color = BfhsColors.TextPrimary,
                     fontSize = 19.sp,
                     fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold

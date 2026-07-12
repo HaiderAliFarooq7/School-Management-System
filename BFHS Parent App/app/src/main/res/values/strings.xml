@@ -19,6 +19,7 @@
 
     <!-- Dashboard -->
     <string name="dashboard_greeting">Assalam-o-Alaikum</string>
+    <string name="dashboard_default_parent">Parent</string>
     <string name="dashboard_my_children">My Children</string>
     <string name="dashboard_today">Today</string>
     <string name="dashboard_dues">Dues</string>
@@ -84,6 +85,7 @@
     <string name="school_phone">Phone</string>
     <string name="school_email">Email</string>
     <string name="school_address">Address</string>
+    <string name="school_no_contact">Contact details not available yet.</string>
     <string name="school_website">Website</string>
 
     <!-- Navigation -->
