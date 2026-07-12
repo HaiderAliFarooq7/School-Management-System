@@ -58,13 +58,13 @@ const TEMPLATES: Record<NotifType, Template[]> = {
 // student: {student} {class} {father} {amount} {date}. Shown to the admin below.
 const SHORT_CODES = '{student}, {class}, {father}, {amount}, {date}'
 
-function duesMessage(student: Student | null): string {
-  if (!student) {
-    // Leave short-codes in place — the backend fills them for the chosen student.
-    return 'Dear Parent, {amount} is pending for {student} ({class}). Kindly submit the remaining dues at the school office. Thank you.'
-  }
-  const amount = `Rs. ${Math.round(student.total_pending ?? 0).toLocaleString()}`
-  return `Dear Parent, ${amount} is pending for ${student.name} (${student.class_name}). Kindly submit the remaining dues at the school office. Thank you.`
+function duesMessage(): string {
+  // Always short-codes — the backend fills them per recipient with the accurate
+  // LIVE dues (name, class, exact pending amount), whether the reminder goes to
+  // one student, a class, or the whole school. This avoids sending a stale
+  // client-side amount (the old "Rs. 0" problem) and guarantees each parent sees
+  // their own child's real details.
+  return 'Dear Parent, {amount} is pending for {student} ({class}). Kindly submit the remaining dues at the school office. Thank you.'
 }
 
 export function NotificationCenterPage() {
@@ -114,7 +114,7 @@ export function NotificationCenterPage() {
     if (!t) return
     if (label.startsWith('Student dues')) {
       setTitle('Fee Reminder')
-      setBody(duesMessage(student))
+      setBody(duesMessage())
     } else {
       setTitle(t.title)
       setBody(t.body)
@@ -123,7 +123,7 @@ export function NotificationCenterPage() {
 
   function insertDuesForStudent() {
     setTitle('Fee Reminder')
-    setBody(duesMessage(student))
+    setBody(duesMessage())
   }
 
   const canSend = useMemo(() => {
