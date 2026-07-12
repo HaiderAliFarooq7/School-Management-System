@@ -42,6 +42,7 @@ import FactCheckIcon from '@mui/icons-material/FactCheck'
 import CorporateFareIcon from '@mui/icons-material/CorporateFare'
 import FamilyRestroomIcon from '@mui/icons-material/FamilyRestroom'
 import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive'
+import HistoryIcon from '@mui/icons-material/History'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { listSchools, switchSchool } from '../../api/master'
@@ -70,6 +71,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Student Fee', path: '/fees/student', icon: <PaidIcon />, roles: ['Admin', 'Accountant'] },
   { label: 'Fee Vouchers', path: '/fees/vouchers', icon: <ReceiptIcon />, roles: ['Admin', 'Accountant'] },
   { label: 'Fee Reports', path: '/fees/reports', icon: <AssessmentIcon />, roles: ['Admin'] },
+  { label: 'Fee Activity', path: '/fees/activity', icon: <HistoryIcon />, roles: ['Admin'] },
   { label: 'Extra Charges', path: '/charges', icon: <RequestQuoteIcon />, roles: ['Admin', 'Accountant'] },
   { label: 'Attendance', path: '/attendance', icon: <EventAvailableIcon />, roles: ['Admin', 'Teacher'] },
   { label: 'Fee Status', path: '/fees/status', icon: <FactCheckIcon />, roles: ['Teacher'] },

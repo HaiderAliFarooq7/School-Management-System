@@ -5,10 +5,11 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.deps import require_role
+from app.deps import CurrentUser, get_current_user, require_role
 from app.models.extra_charge import ExtraCharge
 from app.models.payment_history import PaymentHistory
 from app.models.student import Student
+from app.services import audit_service
 from app.schemas.extra_charge import (
     BulkChargeRequest,
     BulkDeleteChargesRequest,
@@ -71,7 +72,10 @@ def bulk_add_charge(payload: BulkChargeRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/{charge_id}/pay", response_model=ChargeOut)
-def pay_charge(charge_id: int, payload: PayChargeRequest, db: Session = Depends(get_db)):
+def pay_charge(
+    charge_id: int, payload: PayChargeRequest, db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
     if payload.amount <= 0:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Payment amount must be greater than zero.")
     # Row lock — same concurrent-payment guard as pay_voucher.
@@ -91,12 +95,19 @@ def pay_charge(charge_id: int, payload: PayChargeRequest, db: Session = Depends(
     charge.remaining_amount = max(new_remaining, 0)
     charge.status = "Paid" if new_remaining <= 0 else "Open"
     db.add(PaymentHistory(target_type="extra_charge", target_id=charge_id, amount=payload.amount, paid_at=datetime.now()))
+    audit_service.record(
+        db, current_user, action="payment", target_type="extra_charge",
+        student=db.get(Student, charge.student_id), label=charge.description, amount=payload.amount,
+    )
     db.commit()
     return charge
 
 
 @router.post("/{charge_id}/discount", response_model=ChargeOut, dependencies=[require_admin])
-def apply_discount(charge_id: int, payload: DiscountChargeRequest, db: Session = Depends(get_db)):
+def apply_discount(
+    charge_id: int, payload: DiscountChargeRequest, db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
     if payload.amount < 0:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Discount amount cannot be negative.")
     charge = db.get(ExtraCharge, charge_id)
@@ -113,6 +124,11 @@ def apply_discount(charge_id: int, payload: DiscountChargeRequest, db: Session =
     new_remaining = round(float(charge.amount) - float(charge.paid_amount) - payload.amount, 2)
     charge.remaining_amount = max(new_remaining, 0)
     charge.status = "Paid" if new_remaining <= 0 else "Open"
+    audit_service.record(
+        db, current_user, action="discount", target_type="extra_charge",
+        student=db.get(Student, charge.student_id), label=charge.description,
+        amount=payload.amount, reason=payload.reason,
+    )
     db.commit()
     return charge
 
@@ -133,19 +149,30 @@ def bulk_delete_charges(payload: BulkDeleteChargesRequest, db: Session = Depends
 
 
 @router.delete("/{charge_id}", dependencies=[require_admin])
-def delete_charge(charge_id: int, db: Session = Depends(get_db)):
+def delete_charge(
+    charge_id: int, db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
     """Admin-only: delete any charge outright, even one with payments or a
     discount already recorded — Accountants can never delete a charge."""
     charge = db.get(ExtraCharge, charge_id)
     if charge is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Charge not found")
+    audit_service.record(
+        db, current_user, action="delete", target_type="extra_charge",
+        student=db.get(Student, charge.student_id), label=charge.description,
+        note=f"amount={charge.amount}, paid={charge.paid_amount}",
+    )
     db.delete(charge)
     db.commit()
     return {"detail": "Deleted"}
 
 
 @router.put("/{charge_id}", response_model=ChargeOut, dependencies=[require_admin])
-def edit_charge(charge_id: int, payload: ChargeEditRequest, db: Session = Depends(get_db)):
+def edit_charge(
+    charge_id: int, payload: ChargeEditRequest, db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
     """Admin-only: directly overwrite a charge's figures, including ones that
     are already fully paid."""
     charge = db.get(ExtraCharge, charge_id)
@@ -159,5 +186,11 @@ def edit_charge(charge_id: int, payload: ChargeEditRequest, db: Session = Depend
     remaining = round(payload.amount - payload.paid_amount - payload.discount_amount, 2)
     charge.remaining_amount = max(remaining, 0)
     charge.status = "Paid" if remaining <= 0 else "Open"
+    audit_service.record(
+        db, current_user, action="edit", target_type="extra_charge",
+        student=db.get(Student, charge.student_id), label=payload.description,
+        amount=payload.amount, reason=payload.discount_reason,
+        note=f"amount={payload.amount}, paid={payload.paid_amount}, discount={payload.discount_amount}",
+    )
     db.commit()
     return charge

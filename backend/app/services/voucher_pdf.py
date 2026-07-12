@@ -234,14 +234,14 @@ def _draw_receipt(c, db: Session, x0, y0, w, h, student: Student, data: dict, co
     footer_y = max(y - qr_size, main_floor)
 
     qr_voucher = data["qr_voucher"]
+    qr_path = None
     if qr_voucher is not None:
         try:
             qr_text = qr_service.get_or_create_qr_text(db, qr_voucher, student)
             qr_path = qr_service.generate_qr_image(qr_text)
             c.drawImage(qr_path, x0 + pad, footer_y, width=qr_size, height=qr_size)
-            os.remove(qr_path)
         except Exception:
-            pass
+            qr_path = None
 
     c.setFont("Helvetica", font_small)
     c.drawRightString(x0 + w - pad, footer_y + 3 * mm, "Sign/Stamp: ____________________")
@@ -298,6 +298,28 @@ def _draw_receipt(c, db: Session, x0, y0, w, h, student: Student, data: dict, co
     c.setFont("Helvetica-Bold", slip_font_label)
     c.drawString(box_x0, amount_label_y, "Amount Received (Rs.)")
     c.rect(box_x0, bottom_edge, box_w, amount_box_top - bottom_edge)
+
+    # QR on the school copy too — placed in the free space between the info text
+    # block and the remarks/amount divider, vertically centred in the stub.
+    if qr_path is not None:
+        try:
+            copy_qr = 12 * mm if compact else 17 * mm
+            copy_qr = min(copy_qr, slip_h - 2 * mm)
+            copy_qr_x = divider_x - 3 * mm - copy_qr
+            copy_qr_y = y0 + (slip_h - copy_qr) / 2
+            c.drawImage(qr_path, copy_qr_x, copy_qr_y, width=copy_qr, height=copy_qr)
+            c.setFont("Helvetica", slip_font_label - 1)
+            c.drawCentredString(copy_qr_x + copy_qr / 2, copy_qr_y - 2.6 * mm, "Scan for fees")
+        except Exception:
+            pass
+
+    # Temp QR image was reused for both the main receipt and the school copy —
+    # remove it now that both have been drawn.
+    if qr_path is not None:
+        try:
+            os.remove(qr_path)
+        except OSError:
+            pass
 
 
 def generate_single_voucher_pdf(db: Session, student: Student, voucher: FeeVoucher, dest_path: str, note: str | None = None) -> str:

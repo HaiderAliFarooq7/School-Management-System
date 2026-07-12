@@ -7,7 +7,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.deps import require_role
+from app.deps import CurrentUser, get_current_user, require_role
 from app.models.extra_charge import ExtraCharge
 from app.models.fee_voucher import FeeVoucher
 from app.models.grade import Grade
@@ -28,7 +28,7 @@ from app.schemas.fee_voucher import (
     VoucherSearchResult,
     VoucherWithStudentOut,
 )
-from app.services import voucher_pdf
+from app.services import audit_service, voucher_pdf
 
 router = APIRouter(
     prefix="/api/fee-vouchers",
@@ -329,7 +329,10 @@ def bulk_generate(payload: BulkGenerateRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/{voucher_id}/pay", response_model=VoucherOut)
-def pay_voucher(voucher_id: int, payload: PayVoucherRequest, db: Session = Depends(get_db)):
+def pay_voucher(
+    voucher_id: int, payload: PayVoucherRequest, db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
     if payload.amount <= 0:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Payment amount must be greater than zero.")
     # Row lock so two clerks recording a payment for the same voucher at the
@@ -345,12 +348,19 @@ def pay_voucher(voucher_id: int, payload: PayVoucherRequest, db: Session = Depen
     voucher.paid_amount = float(voucher.paid_amount) + payload.amount
     voucher.status = _recompute_status(float(voucher.total_amount), float(voucher.paid_amount), float(voucher.discount_amount))
     db.add(PaymentHistory(target_type="fee_voucher", target_id=voucher_id, amount=payload.amount, paid_at=datetime.now()))
+    audit_service.record(
+        db, current_user, action="payment", target_type="fee_voucher",
+        student=db.get(Student, voucher.student_id), label=voucher.fee_month, amount=payload.amount,
+    )
     db.commit()
     return voucher
 
 
 @router.post("/{voucher_id}/discount", response_model=VoucherOut, dependencies=[require_admin])
-def apply_discount(voucher_id: int, payload: DiscountRequest, db: Session = Depends(get_db)):
+def apply_discount(
+    voucher_id: int, payload: DiscountRequest, db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
     """Apply a fee concession/relaxation (e.g. a parent asks for Rs. 500 off).
     The discount plus whatever's already been paid settle the voucher —
     a partially-paid voucher can become fully 'Paid' once the discount covers
@@ -369,12 +379,20 @@ def apply_discount(voucher_id: int, payload: DiscountRequest, db: Session = Depe
     voucher.discount_amount = payload.amount
     voucher.discount_reason = payload.reason or None
     voucher.status = _recompute_status(float(voucher.total_amount), float(voucher.paid_amount), payload.amount)
+    audit_service.record(
+        db, current_user, action="discount", target_type="fee_voucher",
+        student=db.get(Student, voucher.student_id), label=voucher.fee_month,
+        amount=payload.amount, reason=payload.reason,
+    )
     db.commit()
     return voucher
 
 
 @router.post("/bulk-pay", response_model=list[VoucherOut])
-def bulk_pay(payload: BulkPayRequest, db: Session = Depends(get_db)):
+def bulk_pay(
+    payload: BulkPayRequest, db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
     _, fee_month_sort = month_label_and_sort(payload.year, payload.month)
     vouchers = db.execute(
         select(FeeVoucher)
@@ -391,6 +409,11 @@ def bulk_pay(payload: BulkPayRequest, db: Session = Depends(get_db)):
         voucher.paid_amount = float(voucher.paid_amount) + amount
         voucher.status = _recompute_status(float(voucher.total_amount), float(voucher.paid_amount), float(voucher.discount_amount))
         db.add(PaymentHistory(target_type="fee_voucher", target_id=voucher.voucher_id, amount=amount, paid_at=datetime.now()))
+        audit_service.record(
+            db, current_user, action="payment", target_type="fee_voucher",
+            student=db.get(Student, voucher.student_id), label=voucher.fee_month, amount=amount,
+            note="bulk pay",
+        )
         results.append(voucher)
     db.commit()
     return results
@@ -517,19 +540,30 @@ def get_single_student_dues_pdf(student_id: int, note: str = "", db: Session = D
 
 
 @router.delete("/{voucher_id}", dependencies=[require_admin])
-def delete_voucher(voucher_id: int, db: Session = Depends(get_db)):
+def delete_voucher(
+    voucher_id: int, db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
     """Admin-only: delete any voucher outright, even one with payments or a
     discount already recorded — Accountants can never delete a voucher."""
     voucher = db.get(FeeVoucher, voucher_id)
     if voucher is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Voucher not found")
+    audit_service.record(
+        db, current_user, action="delete", target_type="fee_voucher",
+        student=db.get(Student, voucher.student_id), label=voucher.fee_month,
+        note=f"total={voucher.total_amount}, paid={voucher.paid_amount}, discount={voucher.discount_amount}",
+    )
     db.delete(voucher)
     db.commit()
     return {"detail": "Deleted"}
 
 
 @router.put("/{voucher_id}", response_model=VoucherOut, dependencies=[require_admin])
-def edit_voucher(voucher_id: int, payload: VoucherEditRequest, db: Session = Depends(get_db)):
+def edit_voucher(
+    voucher_id: int, payload: VoucherEditRequest, db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
     """Admin-only: directly overwrite a voucher's figures, including ones that
     are already fully paid — fixes data-entry mistakes without having to
     delete and recreate the voucher."""
@@ -541,5 +575,11 @@ def edit_voucher(voucher_id: int, payload: VoucherEditRequest, db: Session = Dep
     voucher.discount_amount = payload.discount_amount
     voucher.discount_reason = payload.discount_reason
     voucher.status = _recompute_status(payload.total_amount, payload.paid_amount, payload.discount_amount)
+    audit_service.record(
+        db, current_user, action="edit", target_type="fee_voucher",
+        student=db.get(Student, voucher.student_id), label=voucher.fee_month,
+        amount=payload.total_amount, reason=payload.discount_reason,
+        note=f"total={payload.total_amount}, paid={payload.paid_amount}, discount={payload.discount_amount}",
+    )
     db.commit()
     return voucher
