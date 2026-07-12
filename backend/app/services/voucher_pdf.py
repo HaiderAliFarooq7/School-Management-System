@@ -177,8 +177,9 @@ def _draw_receipt(c, db: Session, x0, y0, w, h, student: Student, data: dict, co
     default_row_h = 5.5 * mm if compact else 7.5 * mm
     min_row_h = 3.4 * mm if compact else 4 * mm
 
-    qr_size = 15 * mm if compact else 20 * mm
-    footer_reserve = pad + qr_size + (9 * mm if compact else 13 * mm) + (5.5 * mm if compact else 6.5 * mm)
+    # No QR on the main/student copy any more — it's printed only on the
+    # school-copy stub below. The footer just needs the bank + note + sign lines.
+    footer_reserve = pad + (9 * mm if compact else 13 * mm) + (5.5 * mm if compact else 6.5 * mm)
     table_rows_total = len(rows) + 2  # header + grand total
     available_for_table = table_top - (main_floor + footer_reserve)
     table_row_h = max(min_row_h, min(default_row_h, available_for_table / table_rows_total))
@@ -228,10 +229,10 @@ def _draw_receipt(c, db: Session, x0, y0, w, h, student: Student, data: dict, co
     c.drawString(x0 + pad + 11 * mm, y, note_text[:55 if compact else 80])
     y -= (5.5 * mm if compact else 7 * mm)
 
-    # Continue sequentially from the note line (not a fixed anchor) so a
-    # student with few pending rows doesn't leave a dead gap above the QR —
-    # but never let it drift below main_floor, which would crowd the cut line.
-    footer_y = max(y - qr_size, main_floor)
+    # Sign/stamp line sits just beneath the note. The QR is generated here only
+    # so the school-copy stub below can reuse it — it is NOT drawn on this
+    # student/parent portion of the slip.
+    footer_y = max(y - (6 * mm if compact else 8 * mm), main_floor)
 
     qr_voucher = data["qr_voucher"]
     qr_path = None
@@ -239,7 +240,6 @@ def _draw_receipt(c, db: Session, x0, y0, w, h, student: Student, data: dict, co
         try:
             qr_text = qr_service.get_or_create_qr_text(db, qr_voucher, student)
             qr_path = qr_service.generate_qr_image(qr_text)
-            c.drawImage(qr_path, x0 + pad, footer_y, width=qr_size, height=qr_size)
         except Exception:
             qr_path = None
 
