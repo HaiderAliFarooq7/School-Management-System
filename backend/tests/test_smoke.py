@@ -144,3 +144,29 @@ def test_teacher_absent_scope_limited_to_own_class(client, teacher_headers):
 
 def test_backup_requires_admin(client, accountant_headers):
     assert client.get("/api/backup/database", headers=accountant_headers).status_code == 403
+
+
+# ------------------------------------------------------------- fee audit log
+def test_fee_audit_records_payment_and_discount(client, admin_headers, temp_student):
+    sid = temp_student["student_id"]
+    gen = client.post(
+        "/api/fee-vouchers/generate", headers=admin_headers,
+        json={"student_id": sid, "year": 2026, "month": 3, "total_amount": 1000},
+    )
+    vid = gen.json()["voucher_id"]
+    assert client.post(f"/api/fee-vouchers/{vid}/pay", headers=admin_headers, json={"amount": 300}).status_code == 200
+    assert client.post(
+        f"/api/fee-vouchers/{vid}/discount", headers=admin_headers,
+        json={"amount": 100, "reason": "Sibling concession"},
+    ).status_code == 200
+
+    log = client.get("/api/fee-audit", headers=admin_headers)
+    assert log.status_code == 200
+    entries = log.json()
+    assert any(e["action"] == "payment" and e["student_id"] == sid for e in entries)
+    disc = [e for e in entries if e["action"] == "discount" and e["student_id"] == sid]
+    assert disc and disc[0]["reason"] == "Sibling concession" and disc[0]["actor_username"]
+
+
+def test_fee_audit_is_admin_only(client, accountant_headers):
+    assert client.get("/api/fee-audit", headers=accountant_headers).status_code == 403
