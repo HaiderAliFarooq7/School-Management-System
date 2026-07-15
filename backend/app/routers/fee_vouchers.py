@@ -30,6 +30,7 @@ from app.schemas.fee_voucher import (
 )
 from app.services import audit_service, voucher_pdf
 from app.services.class_order import class_sort_key
+from app.services.search import fuzzy_pick, looks_like_name, text_search_condition
 
 router = APIRouter(
     prefix="/api/fee-vouchers",
@@ -120,15 +121,18 @@ def list_vouchers_for_class(class_name: str, status_filter: str = "", db: Sessio
 def search_vouchers(query: str, db: Session = Depends(get_db)):
     """Find vouchers by voucher number, student name, registration no, phone, or CNIC —
     mirrors how a real fee counter looks a student up from the printed voucher."""
-    like = f"%{query}%"
-    filters = (
-        Student.name.ilike(like)
-        | Student.registration_no.ilike(like)
-        | Student.phone.ilike(like)
-        | Student.cnic.ilike(like)
+    filters = text_search_condition(
+        query, Student.name, Student.registration_no, Student.phone, Student.cnic,
     )
     if query.strip().isdigit():
         filters = filters | (FeeVoucher.voucher_id == int(query.strip()))
+    # Typo-tolerant: also pull vouchers of students whose name is a close
+    # spelling match ("abdulhady" → "Abdul Hadi").
+    if looks_like_name(query):
+        pairs = db.execute(select(Student.student_id, Student.name)).all()
+        fuzzy_ids = fuzzy_pick(query, pairs)
+        if fuzzy_ids:
+            filters = filters | Student.student_id.in_(fuzzy_ids)
 
     rows = db.execute(
         select(FeeVoucher, Student)
