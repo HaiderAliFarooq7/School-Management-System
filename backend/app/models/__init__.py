@@ -14,6 +14,7 @@ from app.models.parent_device import ParentDevice
 from app.models.parent_notification import ParentNotification
 from app.models.notification_log import NotificationLog
 from app.models.fee_audit import FeeAuditLog
+from app.models.cash_handover import CashHandover
 
 __all__ = [
     "Role",
@@ -32,4 +33,5 @@ __all__ = [
     "ParentNotification",
     "NotificationLog",
     "FeeAuditLog",
+    "CashHandover",
 ]

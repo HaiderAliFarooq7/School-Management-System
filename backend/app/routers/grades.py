@@ -7,13 +7,17 @@ from app.deps import require_role
 from app.models.grade import Grade
 from app.models.student import Student
 from app.schemas.grade import GradeCreate, GradeOut, GradeUpdate
+from app.services.class_order import class_sort_key
 
 router = APIRouter(prefix="/api/grades", tags=["grades"])
 
 
 @router.get("", response_model=list[GradeOut])
 def list_grades(db: Session = Depends(get_db)):
-    grades = db.execute(select(Grade).order_by(Grade.class_name)).scalars().all()
+    grades = db.execute(select(Grade)).scalars().all()
+    # Natural class order (Playgroup → Grade 10) so every class dropdown and the
+    # Grades page read in the sequence the school actually uses.
+    grades = sorted(grades, key=lambda g: class_sort_key(g.class_name))
     counts = dict(
         db.execute(
             select(Student.class_name, func.count(Student.student_id))

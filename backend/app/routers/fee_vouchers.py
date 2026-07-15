@@ -29,6 +29,7 @@ from app.schemas.fee_voucher import (
     VoucherWithStudentOut,
 )
 from app.services import audit_service, voucher_pdf
+from app.services.class_order import class_sort_key
 
 router = APIRouter(
     prefix="/api/fee-vouchers",
@@ -499,9 +500,12 @@ def get_all_students_vouchers_pdf(
     query = select(Student).where(Student.status == "Active")
     if class_names:
         query = query.where(Student.class_name.in_(class_names.split(",")))
-    students = db.execute(query.order_by(Student.class_name, Student.name)).scalars().all()
+    students = db.execute(query).scalars().all()
     if not students:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "No active students found.")
+    # Class-wise order (Playgroup → Grade 10), then by student name within a class,
+    # so the printed challans come out sorted the way the office files them.
+    students = sorted(students, key=lambda s: (class_sort_key(s.class_name), (s.name or "").lower()))
 
     buffer = io.BytesIO()
     try:

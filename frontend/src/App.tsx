@@ -36,6 +36,7 @@ const SchoolsPage = lazyPage(() => import('./pages/SchoolsPage'), 'SchoolsPage')
 const ParentManagementPage = lazyPage(() => import('./pages/ParentManagementPage'), 'ParentManagementPage')
 const NotificationCenterPage = lazyPage(() => import('./pages/NotificationCenterPage'), 'NotificationCenterPage')
 const FeeAuditPage = lazyPage(() => import('./pages/FeeAuditPage'), 'FeeAuditPage')
+const CollectionsPage = lazyPage(() => import('./pages/CollectionsPage'), 'CollectionsPage')
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -92,6 +93,7 @@ export default function App() {
                     <Route element={<ProtectedRoute allowedRoles={['Admin']} />}>
                       <Route path="/fees/reports" element={s(<FeeReportsPage />)} />
                       <Route path="/fees/activity" element={s(<FeeAuditPage />)} />
+                      <Route path="/fees/collections" element={s(<CollectionsPage />)} />
                       <Route path="/students/promote" element={s(<PromoteStudentsPage />)} />
                       <Route path="/settings" element={s(<SchoolSettingsPage />)} />
                       <Route path="/users" element={s(<UserManagementPage />)} />
