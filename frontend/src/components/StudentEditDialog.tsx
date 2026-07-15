@@ -64,6 +64,9 @@ export function StudentEditDialog({ student, open, onClose }: Props) {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['students'] })
+      // Keep the single-student views (e.g. the Student Fee page) in sync.
+      queryClient.invalidateQueries({ queryKey: ['student', student!.student_id] })
+      queryClient.invalidateQueries({ queryKey: ['balance-sheet', student!.student_id] })
       onClose()
     },
     onError: (e) => setError(String((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Could not save changes.')),

@@ -12,8 +12,10 @@ import { applyVoucherDiscount, deleteVoucher, editVoucher, generateVoucher, payV
 import { addCharge, applyChargeDiscount, deleteCharge, editCharge, payCharge } from '../api/extraCharges'
 import { listGrades } from '../api/grades'
 import QrCodeScannerIcon from '@mui/icons-material/QrCodeScanner'
+import EditIcon from '@mui/icons-material/Edit'
 import { DiscountDialog } from '../components/DiscountDialog'
 import { EditFigureDialog } from '../components/EditFigureDialog'
+import { StudentEditDialog } from '../components/StudentEditDialog'
 import { QrScannerDialog } from '../components/QrScannerDialog'
 import { useConfirm, useToast } from '../components/feedback'
 import { useAuth } from '../context/AuthContext'
@@ -109,6 +111,7 @@ function StudentLedger({ studentId }: { studentId: number }) {
   const [discountError, setDiscountError] = useState<string | null>(null)
   const [editTarget, setEditTarget] = useState<{ type: 'voucher' | 'charge'; id: number } | null>(null)
   const [editError, setEditError] = useState<string | null>(null)
+  const [editStudentOpen, setEditStudentOpen] = useState(false)
 
   const refresh = () => {
     queryClient.invalidateQueries({ queryKey: ['balance-sheet', studentId] })
@@ -203,9 +206,14 @@ function StudentLedger({ studentId }: { studentId: number }) {
     <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 3, alignItems: 'flex-start' }}>
       <Box sx={{ flex: 1, minWidth: 0, width: '100%' }}>
       <Button sx={{ mb: 1 }} onClick={() => navigate('/fees/student')}>← Search Another Student</Button>
-      <Typography variant="h5" gutterBottom>
-        {student.name} <Typography component="span" color="text.secondary">({student.registration_no})</Typography>
-      </Typography>
+      <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.5, flexWrap: 'wrap' }}>
+        <Typography variant="h5" gutterBottom>
+          {student.name} <Typography component="span" color="text.secondary">({student.registration_no})</Typography>
+        </Typography>
+        <Button size="small" variant="outlined" startIcon={<EditIcon fontSize="small" />} onClick={() => setEditStudentOpen(true)}>
+          Edit Student
+        </Button>
+      </Box>
       <Typography color="text.secondary" gutterBottom>
         Class: {student.class_name} · Father: {student.father_name} · Phone: {student.phone || '—'} · CNIC: {student.cnic || '—'}
       </Typography>
@@ -491,6 +499,12 @@ function StudentLedger({ studentId }: { studentId: number }) {
             editChargeMutation.mutate({ chargeId: editTarget.id, values: { ...values, description: values.description ?? '' } })
           }
         }}
+      />
+
+      <StudentEditDialog
+        student={student}
+        open={editStudentOpen}
+        onClose={() => setEditStudentOpen(false)}
       />
       </Box>
 
