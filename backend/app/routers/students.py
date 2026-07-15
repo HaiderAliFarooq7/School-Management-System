@@ -30,6 +30,7 @@ from app.schemas.student_import import (
 )
 from app.services import student_import_service as import_service
 from app.services.fee_status import aggregate_fee_status, fee_summaries_for_students
+from app.services.search import fuzzy_pick, looks_like_name, text_search_condition
 from app.schemas.fee_voucher import VoucherOut
 from app.schemas.extra_charge import ChargeOut
 
@@ -167,19 +168,40 @@ def list_students(
     class_filter = scope_class_filter(current_user, class_filter) or ""
     query = select(Student)
     if search:
-        like = f"%{search}%"
         query = query.where(
-            (Student.name.ilike(like))
-            | (Student.registration_no.ilike(like))
-            | (Student.cnic.ilike(like))
+            text_search_condition(search, Student.name, Student.registration_no, Student.cnic)
         )
     if class_filter:
         query = query.where(Student.class_name == class_filter)
     if status_filter:
         query = query.where(Student.status == status_filter)
     query = query.order_by(Student.student_id.desc())
-    students = db.execute(query).scalars().all()
+    students = list(db.execute(query).scalars().all())
+    # Typo-tolerant supplement: surface close spelling variants of a name that
+    # the exact/normalized match above missed (e.g. "abdulhady" → "Abdul Hadi").
+    if search and looks_like_name(search):
+        students = _augment_with_fuzzy(db, search, students, class_filter, status_filter)
     return _to_out_many(db, students, current_user)
+
+
+def _augment_with_fuzzy(
+    db: Session, search: str, base: list[Student], class_filter: str, status_filter: str,
+) -> list[Student]:
+    """Append fuzzy name matches (respecting the same class/status filters) to
+    the exact matches, keeping exact matches first."""
+    candidate_query = select(Student.student_id, Student.name)
+    if class_filter:
+        candidate_query = candidate_query.where(Student.class_name == class_filter)
+    if status_filter:
+        candidate_query = candidate_query.where(Student.status == status_filter)
+    pairs = db.execute(candidate_query).all()
+    extra_ids = fuzzy_pick(search, pairs, exclude_ids={s.student_id for s in base})
+    if not extra_ids:
+        return base
+    extra = db.execute(select(Student).where(Student.student_id.in_(extra_ids))).scalars().all()
+    order = {sid: i for i, sid in enumerate(extra_ids)}
+    extra.sort(key=lambda s: order.get(s.student_id, 0))
+    return base + list(extra)
 
 
 @router.get("/class-counts")
@@ -309,9 +331,8 @@ def export_students_bulk(
             query = query.where(Student.status == status_filter)
     elif scope == "search":
         if search:
-            like = f"%{search}%"
             query = query.where(
-                (Student.name.ilike(like)) | (Student.registration_no.ilike(like)) | (Student.cnic.ilike(like))
+                text_search_condition(search, Student.name, Student.registration_no, Student.cnic)
             )
     query = query.order_by(Student.student_id)
     students = db.execute(query).scalars().all()
@@ -541,17 +562,17 @@ def search_advanced(
     class_filter = scope_class_filter(current_user, params.class_filter)
     query = select(Student)
     if params.name:
-        query = query.where(Student.name.ilike(f"%{params.name}%"))
+        query = query.where(text_search_condition(params.name, Student.name))
     if params.registration_no:
-        query = query.where(Student.registration_no.ilike(f"%{params.registration_no}%"))
+        query = query.where(text_search_condition(params.registration_no, Student.registration_no))
     if params.cnic:
-        query = query.where(Student.cnic.ilike(f"%{params.cnic}%"))
+        query = query.where(text_search_condition(params.cnic, Student.cnic))
     if params.phone:
-        query = query.where(Student.phone.ilike(f"%{params.phone}%"))
+        query = query.where(text_search_condition(params.phone, Student.phone))
     if params.father_name:
-        query = query.where(Student.father_name.ilike(f"%{params.father_name}%"))
+        query = query.where(text_search_condition(params.father_name, Student.father_name))
     if params.address:
-        query = query.where(Student.address.ilike(f"%{params.address}%"))
+        query = query.where(text_search_condition(params.address, Student.address))
     if class_filter:
         query = query.where(Student.class_name == class_filter)
     if params.status_filter:
