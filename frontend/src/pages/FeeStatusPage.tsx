@@ -59,13 +59,14 @@ export function FeeStatusPage() {
 
       {!isLoading && data && data.length > 0 && (
         canManageFees ? (
-          <TableContainer sx={{ maxWidth: 600 }}>
-            <Table size="small" sx={{ minWidth: 420 }}>
+          <TableContainer sx={{ maxWidth: 900 }}>
+            <Table size="small" sx={{ minWidth: 640 }}>
               <TableHead>
                 <TableRow>
                   <TableCell>Reg No</TableCell>
                   <TableCell>Name</TableCell>
-                  <TableCell align="right">Pending (Rs.)</TableCell>
+                  <TableCell>Unpaid Months / Charges</TableCell>
+                  <TableCell align="right">Total Pending (Rs.)</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -78,12 +79,21 @@ export function FeeStatusPage() {
                   >
                     <TableCell>{s.registration_no}</TableCell>
                     <TableCell>{s.name}</TableCell>
-                    <TableCell align="right">{(s.total_pending ?? 0).toFixed(0)}</TableCell>
+                    <TableCell>
+                      {(s.pending_months ?? []).map((m) => `${m.month} (${m.amount.toFixed(0)})`).join(', ')}
+                      {(s.pending_charges ?? 0) > 0 && (
+                        <Typography component="span" variant="body2" color="warning.main">
+                          {(s.pending_months?.length ?? 0) > 0 ? ' + ' : ''}
+                          Charges ({(s.pending_charges ?? 0).toFixed(0)})
+                        </Typography>
+                      )}
+                    </TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 'bold' }}>{(s.total_pending ?? 0).toFixed(0)}</TableCell>
                   </TableRow>
                 ))}
                 <TableRow>
-                  <TableCell colSpan={2} sx={{ fontWeight: 'bold' }}>
-                    Total ({data.length} student{data.length === 1 ? '' : 's'})
+                  <TableCell colSpan={3} sx={{ fontWeight: 'bold' }}>
+                    Class Total ({data.length} student{data.length === 1 ? '' : 's'})
                   </TableCell>
                   <TableCell align="right" sx={{ fontWeight: 'bold' }}>
                     {totalPending.toFixed(0)}

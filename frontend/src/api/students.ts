@@ -137,6 +137,10 @@ export interface PendingFeeStudent {
   registration_no: string
   /** Total pending (vouchers + charges). Only sent to Admin/Accountant; null for Teachers. */
   total_pending: number | null
+  /** Each unpaid month and its remaining balance. Admin/Accountant only. */
+  pending_months: { month: string; amount: number }[] | null
+  /** Pending extra charges total. Admin/Accountant only. */
+  pending_charges: number | null
 }
 
 export async function getPendingFeeNames(class_name = ''): Promise<PendingFeeStudent[]> {

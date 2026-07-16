@@ -463,20 +463,47 @@ def get_pending_fee_names(
         if s.student_id in with_pending_vouchers or s.student_id in with_pending_charges
     ]
 
+    # Admin/Accountant also get the full money picture: every unpaid month
+    # (with its remaining balance), pending extra charges, and the sum.
     show_amounts = current_user.role_name in ("Admin", "Accountant")
-    summaries = (
-        fee_summaries_for_students(db, [s.student_id for s in pending_students])
-        if show_amounts else {}
-    )
-    return [
-        {
-            "student_id": s.student_id,
-            "name": s.name,
-            "registration_no": s.registration_no,
-            "total_pending": summaries[s.student_id][1] if show_amounts else None,
+    months_by_student: dict[int, list[tuple[str, str, float]]] = {}
+    voucher_pending: dict[int, float] = {}
+    charges_pending: dict[int, float] = {}
+    if show_amounts and pending_students:
+        pending_ids = [s.student_id for s in pending_students]
+        for v in db.execute(
+            select(FeeVoucher).where(
+                FeeVoucher.student_id.in_(pending_ids), FeeVoucher.status != "Paid"
+            )
+        ).scalars():
+            if v.remaining > 0:
+                months_by_student.setdefault(v.student_id, []).append(
+                    (v.fee_month_sort, v.fee_month, v.remaining)
+                )
+                voucher_pending[v.student_id] = voucher_pending.get(v.student_id, 0) + v.remaining
+        charges_pending = {
+            sid: float(total)
+            for sid, total in db.execute(
+                select(ExtraCharge.student_id, func.coalesce(func.sum(ExtraCharge.remaining_amount), 0))
+                .where(ExtraCharge.student_id.in_(pending_ids), ExtraCharge.status != "Paid")
+                .group_by(ExtraCharge.student_id)
+            ).all()
         }
-        for s in pending_students
-    ]
+
+    def _row(s: Student) -> dict:
+        row = {"student_id": s.student_id, "name": s.name, "registration_no": s.registration_no,
+               "total_pending": None, "pending_months": None, "pending_charges": None}
+        if show_amounts:
+            months = sorted(months_by_student.get(s.student_id, []))
+            charges = charges_pending.get(s.student_id, 0)
+            row["total_pending"] = round(voucher_pending.get(s.student_id, 0) + charges, 2)
+            row["pending_months"] = [
+                {"month": month, "amount": round(rem, 2)} for _, month, rem in months
+            ]
+            row["pending_charges"] = round(charges, 2)
+        return row
+
+    return [_row(s) for s in pending_students]
 
 
 @router.get("/{student_id}", response_model=StudentOut)
