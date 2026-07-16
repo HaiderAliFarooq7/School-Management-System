@@ -63,7 +63,7 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { label: 'Dashboard', path: '/', icon: <DashboardIcon />, roles: ['Admin', 'Accountant'] },
+  { label: 'Dashboard', path: '/', icon: <DashboardIcon />, roles: ['Admin', 'Accountant', 'Teacher'] },
   { label: 'Students', path: '/students', icon: <PeopleIcon />, roles: ['Admin', 'Accountant'] },
   { label: 'Advanced Search', path: '/students/search', icon: <SearchIcon />, roles: ['Admin', 'Accountant'] },
   { label: 'New Admission', path: '/students/new', icon: <PersonAddIcon />, roles: ['Admin', 'Accountant'] },
@@ -76,7 +76,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Collections', path: '/fees/collections', icon: <AccountBalanceWalletIcon />, roles: ['Admin'] },
   { label: 'Extra Charges', path: '/charges', icon: <RequestQuoteIcon />, roles: ['Admin', 'Accountant'] },
   { label: 'Attendance', path: '/attendance', icon: <EventAvailableIcon />, roles: ['Admin', 'Teacher', 'Accountant'] },
-  { label: 'Fee Status', path: '/fees/status', icon: <FactCheckIcon />, roles: ['Teacher'] },
+  { label: 'Fee Status', path: '/fees/status', icon: <FactCheckIcon />, roles: ['Admin', 'Accountant', 'Teacher'] },
   { label: 'Parents', path: '/parents', icon: <FamilyRestroomIcon />, roles: ['Admin'] },
   { label: 'Notifications', path: '/notifications', icon: <NotificationsActiveIcon />, roles: ['Admin', 'Accountant'] },
   { label: 'School Settings', path: '/settings', icon: <SettingsIcon />, roles: ['Admin'] },

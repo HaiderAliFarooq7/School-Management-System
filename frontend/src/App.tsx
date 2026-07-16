@@ -112,7 +112,7 @@ export default function App() {
                       <Route path="/attendance" element={s(<AttendancePage />)} />
                     </Route>
 
-                    <Route element={<ProtectedRoute allowedRoles={['Teacher']} />}>
+                    <Route element={<ProtectedRoute allowedRoles={['Admin', 'Accountant', 'Teacher']} />}>
                       <Route path="/fees/status" element={s(<FeeStatusPage />)} />
                     </Route>
 

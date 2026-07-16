@@ -429,10 +429,12 @@ def promote_all_students(payload: PromoteRequest, db: Session = Depends(get_db))
 def get_pending_fee_names(
     class_name: str = "",
     db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
 ):
-    """Teacher-safe view: just the names of active students in a class who
-    have any pending fee voucher or extra charge — no amounts, no other
-    financial detail. Any role permitted here may query any class."""
+    """Class-wise pending-fee list. For Teachers this stays a names-only view
+    (no amounts, no other financial detail); Admin/Accountant additionally get
+    each student's total pending amount so they can act on it. Any role
+    permitted here may query any class."""
     if not class_name:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "class_name is required")
 
@@ -456,10 +458,24 @@ def get_pending_fee_names(
         ).scalars().all()
     ) if student_ids else set()
 
-    return [
-        {"student_id": s.student_id, "name": s.name, "registration_no": s.registration_no}
-        for s in students
+    pending_students = [
+        s for s in students
         if s.student_id in with_pending_vouchers or s.student_id in with_pending_charges
+    ]
+
+    show_amounts = current_user.role_name in ("Admin", "Accountant")
+    summaries = (
+        fee_summaries_for_students(db, [s.student_id for s in pending_students])
+        if show_amounts else {}
+    )
+    return [
+        {
+            "student_id": s.student_id,
+            "name": s.name,
+            "registration_no": s.registration_no,
+            "total_pending": summaries[s.student_id][1] if show_amounts else None,
+        }
+        for s in pending_students
     ]
 
 

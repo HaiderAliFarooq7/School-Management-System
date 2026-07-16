@@ -119,6 +119,29 @@ def test_pending_fee_report(client, admin_headers):
     assert isinstance(resp.json(), list)
 
 
+def test_pending_fee_names_amounts_by_role(client, admin_headers, teacher_headers, temp_student):
+    # An unpaid voucher puts the student on the pending list.
+    sid = temp_student["student_id"]
+    gen = client.post(
+        "/api/fee-vouchers/generate", headers=admin_headers,
+        json={"student_id": sid, "year": 2026, "month": 4, "total_amount": 500},
+    )
+    assert gen.status_code == 200
+
+    # Admin sees the pending amount; Teacher gets names only (total_pending null).
+    admin_rows = client.get(
+        "/api/students/pending-fee-names", headers=admin_headers, params={"class_name": TEST_CLASS}
+    ).json()
+    admin_row = next(r for r in admin_rows if r["student_id"] == sid)
+    assert admin_row["total_pending"] is not None and admin_row["total_pending"] > 0
+
+    teacher_rows = client.get(
+        "/api/students/pending-fee-names", headers=teacher_headers, params={"class_name": TEST_CLASS}
+    ).json()
+    teacher_row = next(r for r in teacher_rows if r["student_id"] == sid)
+    assert teacher_row["total_pending"] is None
+
+
 # --------------------------------------------------------------- permissions
 
 def test_accountant_cannot_delete_student(client, accountant_headers, temp_student):

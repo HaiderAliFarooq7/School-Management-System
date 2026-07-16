@@ -10,6 +10,7 @@ import { PieChart } from '@mui/x-charts/PieChart'
 import PersonAddIcon from '@mui/icons-material/PersonAdd'
 import PaidIcon from '@mui/icons-material/Paid'
 import QrCodeScannerIcon from '@mui/icons-material/QrCodeScanner'
+import EventAvailableIcon from '@mui/icons-material/EventAvailable'
 import { useNavigate } from 'react-router-dom'
 import { getAttendanceDailyStatus } from '../api/attendance'
 import { getDashboardStats } from '../api/dashboard'
@@ -55,39 +56,52 @@ export function DashboardPage() {
         Dashboard
       </Typography>
 
-      {(role === 'Admin' || role === 'Accountant') && (
-        <Box sx={{ display: 'flex', gap: 2, mb: 3, flexWrap: 'wrap' }}>
-          <Button
-            variant="contained"
-            size="large"
-            startIcon={<PersonAddIcon />}
-            onClick={() => navigate('/students/new')}
-            sx={{ py: 2, px: 4, fontSize: '1.1rem' }}
-          >
-            New Admission
-          </Button>
-          <Button
-            variant="outlined"
-            size="large"
-            startIcon={<PaidIcon />}
-            onClick={() => navigate('/fees/student')}
-            sx={{ py: 2, px: 4, fontSize: '1.1rem' }}
-          >
-            Student Fee
-          </Button>
-          <Button
-            variant="outlined"
-            size="large"
-            color="secondary"
-            startIcon={<QrCodeScannerIcon />}
-            onClick={() => setScannerOpen(true)}
-            sx={{ py: 2, px: 4, fontSize: '1.1rem' }}
-          >
-            Fee QR Scanner
-          </Button>
-          <QrScannerDialog open={scannerOpen} onClose={() => setScannerOpen(false)} />
-        </Box>
-      )}
+      <Box sx={{ display: 'flex', gap: 2, mb: 3, flexWrap: 'wrap' }}>
+        {/* Attendance is a quick action for every role. */}
+        <Button
+          variant="contained"
+          size="large"
+          color="success"
+          startIcon={<EventAvailableIcon />}
+          onClick={() => navigate('/attendance')}
+          sx={{ py: 2, px: 4, fontSize: '1.1rem' }}
+        >
+          Attendance
+        </Button>
+        {(role === 'Admin' || role === 'Accountant') && (
+          <>
+            <Button
+              variant="contained"
+              size="large"
+              startIcon={<PersonAddIcon />}
+              onClick={() => navigate('/students/new')}
+              sx={{ py: 2, px: 4, fontSize: '1.1rem' }}
+            >
+              New Admission
+            </Button>
+            <Button
+              variant="outlined"
+              size="large"
+              startIcon={<PaidIcon />}
+              onClick={() => navigate('/fees/student')}
+              sx={{ py: 2, px: 4, fontSize: '1.1rem' }}
+            >
+              Student Fee
+            </Button>
+            <Button
+              variant="outlined"
+              size="large"
+              color="secondary"
+              startIcon={<QrCodeScannerIcon />}
+              onClick={() => setScannerOpen(true)}
+              sx={{ py: 2, px: 4, fontSize: '1.1rem' }}
+            >
+              Fee QR Scanner
+            </Button>
+            <QrScannerDialog open={scannerOpen} onClose={() => setScannerOpen(false)} />
+          </>
+        )}
+      </Box>
 
       {canSeeAttendanceStatus ? (
         <Grid container spacing={2}>

@@ -135,6 +135,8 @@ export interface PendingFeeStudent {
   student_id: number
   name: string
   registration_no: string
+  /** Total pending (vouchers + charges). Only sent to Admin/Accountant; null for Teachers. */
+  total_pending: number | null
 }
 
 export async function getPendingFeeNames(class_name = ''): Promise<PendingFeeStudent[]> {
