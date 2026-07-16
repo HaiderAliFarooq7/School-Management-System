@@ -87,15 +87,11 @@ export function AttendancePage() {
           value={className}
           onChange={(e) => setClassName(e.target.value)}
           displayEmpty
-          disabled={role === 'Teacher'}
           sx={{ width: { xs: '100%', sm: 180 } }}
         >
           <MenuItem value="" disabled>Select a class</MenuItem>
-          {/* Teachers may only ever mark their own assigned class. */}
-          {(role === 'Teacher'
-            ? grades?.filter((g) => g.class_name === assignedClassName)
-            : grades
-          )?.map((g) => <MenuItem key={g.grade_id} value={g.class_name}>{g.class_name}</MenuItem>)}
+          {/* Any role may mark any class; Teachers just default to their own. */}
+          {grades?.map((g) => <MenuItem key={g.grade_id} value={g.class_name}>{g.class_name}</MenuItem>)}
         </Select>
         <TextField type="date" size="small" value={date} onChange={(e) => setDate(e.target.value)} />
         <Button variant="contained" disabled={!className || !students?.length} onClick={() => markMutation.mutate()}>

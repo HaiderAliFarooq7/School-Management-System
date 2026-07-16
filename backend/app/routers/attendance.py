@@ -54,15 +54,15 @@ def _auto_notify_enabled(db: Session) -> bool:
     return school is None or school.auto_notify_absent
 
 
-@router.post("/mark", response_model=list[AttendanceOut], dependencies=[Depends(require_role("Admin", "Teacher"))])
+@router.post("/mark", response_model=list[AttendanceOut], dependencies=[Depends(require_role("Admin", "Teacher", "Accountant"))])
 def mark_attendance(
     payload: MarkAttendanceRequest,
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_current_user),
 ):
-    # Teachers can only ever mark their own assigned class, and only students
-    # who actually belong to that class — otherwise a Teacher token could
-    # write attendance for any student in the school.
+    # Any Admin/Teacher/Accountant may mark any class, but only students who
+    # actually belong to that class — a stray/stale entry must not write
+    # attendance for a student in a different class.
     scope_class_filter(current_user, payload.class_name)
     class_student_ids = set(
         db.execute(
@@ -244,7 +244,7 @@ def get_absent_today(
     current_user: CurrentUser = Depends(get_current_user),
 ):
     """Students with at least one Absent record for the given day (default
-    today). Teachers only ever see their own assigned class."""
+    today). Teachers default to their own class but may query any class."""
     target_date = attendance_date or date_type.today()
     effective_class = scope_class_filter(current_user, class_name)
 

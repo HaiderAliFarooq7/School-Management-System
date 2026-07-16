@@ -108,7 +108,7 @@ export default function App() {
                       <Route path="/notifications" element={s(<NotificationCenterPage />)} />
                     </Route>
 
-                    <Route element={<ProtectedRoute allowedRoles={['Admin', 'Teacher']} />}>
+                    <Route element={<ProtectedRoute allowedRoles={['Admin', 'Teacher', 'Accountant']} />}>
                       <Route path="/attendance" element={s(<AttendancePage />)} />
                     </Route>
 

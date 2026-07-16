@@ -131,9 +131,8 @@ def get_current_parent(
 
 
 def scope_class_filter(current_user: CurrentUser, requested_class_name: str | None) -> str | None:
-    """Teachers are restricted to their own assigned class regardless of what they request."""
-    if current_user.role_name == "Teacher":
-        if requested_class_name and requested_class_name != current_user.assigned_class_name:
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "Not authorized for this class")
+    """Teachers may access any class (e.g. to cover attendance for a colleague);
+    when they don't specify one, default to their own assigned class."""
+    if current_user.role_name == "Teacher" and not requested_class_name:
         return current_user.assigned_class_name
     return requested_class_name

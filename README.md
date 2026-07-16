@@ -12,11 +12,11 @@ There is no supported local/dev runtime — the backend refuses to start without
 
 ## Features
 
-- **Auth & roles**: JWT login, Admin / Accountant / Teacher roles, Teacher access scoped to their assigned class.
+- **Auth & roles**: JWT login, Admin / Accountant / Teacher roles. Teachers default to their assigned class but may take/view attendance for any class.
 - **Students**: CRUD, search, advanced search, admission form with an optional **per-student default fee** (overrides the class fee for that student in all future voucher generation).
 - **Grades**: CRUD with in-use delete guard.
 - **Fees**: vouchers (generate/pay/delete), **bulk voucher generation class-wise**, extra charges (add/pay/delete), fee reports (monthly collection, class summary, overdue list, balance sheet), dashboard stats.
-- **Attendance**: per-class/date marking grid (Present/Absent/Late/Leave), monthly summary, Teacher access scoped to their own class.
+- **Attendance**: per-class/date marking grid (Present/Absent/Late/Leave), monthly summary. Admin, Teachers and Accountants can mark/view attendance for **all classes** (Teachers default to their own class).
 - **Backup & restore**: on-demand `pg_dump` that streams straight to the browser and is never stored on the server, restore from an uploaded `.dump`, Excel export/import of students, full data reset (keeps school settings/users).
 - **User management**: create/deactivate users, assign roles and (for Teachers) a class. Any user can change their own password from the account menu.
 - **School settings**: school info, bank details, fee due day, logo upload.

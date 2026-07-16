@@ -126,20 +126,31 @@ def test_accountant_cannot_delete_student(client, accountant_headers, temp_stude
     assert resp.status_code == 403
 
 
-def test_teacher_students_scoped_to_own_class(client, teacher_headers, temp_student):
-    # Teacher can list students, but only ever their own assigned class.
+def test_teacher_students_default_to_own_class(client, teacher_headers, temp_student):
+    # With no class_filter, a Teacher's list defaults to their assigned class.
     own = client.get("/api/students", headers=teacher_headers)
     assert own.status_code == 200
     assert all(s["class_name"] == TEST_CLASS for s in own.json())
-    # Requesting another class is rejected outright.
+    # Teachers may request any other class (needed to cover its attendance).
     other = client.get("/api/students", headers=teacher_headers, params={"class_filter": "Grade 1"})
-    assert other.status_code == 403
+    assert other.status_code == 200
 
 
-def test_teacher_absent_scope_limited_to_own_class(client, teacher_headers):
-    # Teacher's own class is the test class; requesting another class is rejected.
+def test_teacher_can_query_any_class_attendance(client, teacher_headers):
+    # Teachers may query attendance for any class, not just their own.
     resp = client.get("/api/attendance/absent-today", headers=teacher_headers, params={"class_name": "Grade 1"})
-    assert resp.status_code == 403
+    assert resp.status_code == 200
+
+
+def test_accountant_can_mark_attendance(client, accountant_headers, temp_student):
+    sid = temp_student["student_id"]
+    today = date.today().isoformat()
+    resp = client.post(
+        "/api/attendance/mark", headers=accountant_headers,
+        json={"class_name": TEST_CLASS, "attendance_date": today,
+              "entries": [{"student_id": sid, "status": "Present"}]},
+    )
+    assert resp.status_code == 200
 
 
 def test_backup_requires_admin(client, accountant_headers):

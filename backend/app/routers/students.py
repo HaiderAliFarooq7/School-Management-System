@@ -163,8 +163,9 @@ def list_students(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_current_user),
 ):
-    # Teachers may only ever see their own assigned class (they need this for
-    # attendance); Admin/Accountant see whatever class_filter they pass.
+    # Teachers default to their own assigned class but may request any class
+    # (they need the roster to take any class's attendance); Admin/Accountant
+    # see whatever class_filter they pass.
     class_filter = scope_class_filter(current_user, class_filter) or ""
     query = select(Student)
     if search:
