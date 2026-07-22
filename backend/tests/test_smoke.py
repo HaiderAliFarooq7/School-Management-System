@@ -204,3 +204,45 @@ def test_fee_audit_records_payment_and_discount(client, admin_headers, temp_stud
 
 def test_fee_audit_is_admin_only(client, accountant_headers):
     assert client.get("/api/fee-audit", headers=accountant_headers).status_code == 403
+
+
+# --------------------------------------------------- collections void-on-delete
+def test_deleting_voucher_removes_its_collection(client, admin_headers, temp_student):
+    """Reproduces the reported bug: pay a voucher, delete it, generate the same
+    month again and pay it — collections must count only the surviving payment,
+    not the deleted one."""
+    sid = temp_student["student_id"]
+
+    def collected_for_student() -> float:
+        rows = client.get(
+            "/api/collections/detail", headers=admin_headers, params={"limit": 2000}
+        ).json()
+        return sum(r["amount"] or 0 for r in rows if r["student_id"] == sid)
+
+    baseline = collected_for_student()
+
+    # 1) Generate + pay 300, then delete the voucher entirely.
+    v1 = client.post(
+        "/api/fee-vouchers/generate", headers=admin_headers,
+        json={"student_id": sid, "year": 2026, "month": 5, "total_amount": 1000},
+    ).json()["voucher_id"]
+    client.post(f"/api/fee-vouchers/{v1}/pay", headers=admin_headers, json={"amount": 300})
+    assert client.delete(f"/api/fee-vouchers/{v1}", headers=admin_headers).status_code == 200
+
+    # 2) Re-generate the same month and pay 250 on the new voucher.
+    v2 = client.post(
+        "/api/fee-vouchers/generate", headers=admin_headers,
+        json={"student_id": sid, "year": 2026, "month": 5, "total_amount": 1000},
+    ).json()["voucher_id"]
+    client.post(f"/api/fee-vouchers/{v2}/pay", headers=admin_headers, json={"amount": 250})
+
+    # Only the surviving 250 should be counted — the deleted 300 is voided.
+    assert abs(collected_for_student() - (baseline + 250)) < 0.01
+
+    # And the deleted payment no longer appears in the drill-down.
+    rows = client.get("/api/collections/detail", headers=admin_headers, params={"limit": 2000}).json()
+    may_amounts = [r["amount"] for r in rows if r["student_id"] == sid and r["label"] == "May 2026"]
+    assert 300 not in may_amounts and 250 in may_amounts
+
+    # cleanup
+    client.delete(f"/api/fee-vouchers/{v2}", headers=admin_headers)

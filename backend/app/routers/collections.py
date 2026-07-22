@@ -82,7 +82,7 @@ def collections_summary(date_from: str = "", date_to: str = "", db: Session = De
             func.coalesce(func.sum(FeeAuditLog.amount), 0),
             func.count(FeeAuditLog.id),
         )
-        .where(FeeAuditLog.action == "payment")
+        .where(FeeAuditLog.action == "payment", FeeAuditLog.voided.is_(False))
         .group_by(
             FeeAuditLog.actor_user_id,
             FeeAuditLog.actor_username,
@@ -158,7 +158,7 @@ def collections_detail(
     """Individual payments (which student, how much, when) — newest first.
     Optionally scoped to one accountant for the drill-down view."""
     start, end = _datetime_bounds(date_from, date_to)
-    query = select(FeeAuditLog).where(FeeAuditLog.action == "payment")
+    query = select(FeeAuditLog).where(FeeAuditLog.action == "payment", FeeAuditLog.voided.is_(False))
     if actor_user_id is not None:
         query = query.where(FeeAuditLog.actor_user_id == actor_user_id)
     if start is not None:
@@ -203,7 +203,7 @@ def reconciliation(db: Session = Depends(get_db)):
             func.max(FeeAuditLog.actor_role),
             func.coalesce(func.sum(FeeAuditLog.amount), 0),
         )
-        .where(FeeAuditLog.action == "payment")
+        .where(FeeAuditLog.action == "payment", FeeAuditLog.voided.is_(False))
         .group_by(FeeAuditLog.actor_user_id)
     ).all()
     for user_id, username, role, total in collected:

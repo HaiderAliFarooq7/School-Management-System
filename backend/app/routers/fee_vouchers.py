@@ -253,7 +253,10 @@ def filter_vouchers(
 
 
 @router.post("/bulk-delete", response_model=BulkDeleteResult, dependencies=[require_admin])
-def bulk_delete_vouchers(payload: BulkDeleteVouchersRequest, db: Session = Depends(get_db)):
+def bulk_delete_vouchers(
+    payload: BulkDeleteVouchersRequest, db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
     """Admin-only: delete a hand-picked set of vouchers outright — e.g. every
     voucher selected in the filtered grid for a given month — even ones that
     already have a payment or discount recorded."""
@@ -263,6 +266,16 @@ def bulk_delete_vouchers(payload: BulkDeleteVouchersRequest, db: Session = Depen
     found_ids = {v.voucher_id for v in vouchers}
     skipped = [{"voucher_id": vid, "reason": "Voucher not found"} for vid in payload.voucher_ids if vid not in found_ids]
     for voucher in vouchers:
+        audit_service.record(
+            db, current_user, action="delete", target_type="fee_voucher", target_id=voucher.voucher_id,
+            student=db.get(Student, voucher.student_id), label=voucher.fee_month,
+            note=f"total={voucher.total_amount}, paid={voucher.paid_amount}, discount={voucher.discount_amount}",
+        )
+        # Void this voucher's payments so they leave the collections totals.
+        audit_service.void_for_target(
+            db, target_type="fee_voucher", target_id=voucher.voucher_id,
+            student_id=voucher.student_id, label=voucher.fee_month,
+        )
         db.delete(voucher)
     db.commit()
     return BulkDeleteResult(deleted=len(vouchers), skipped=skipped)
@@ -354,7 +367,7 @@ def pay_voucher(
     voucher.status = _recompute_status(float(voucher.total_amount), float(voucher.paid_amount), float(voucher.discount_amount))
     db.add(PaymentHistory(target_type="fee_voucher", target_id=voucher_id, amount=payload.amount, paid_at=datetime.now()))
     audit_service.record(
-        db, current_user, action="payment", target_type="fee_voucher",
+        db, current_user, action="payment", target_type="fee_voucher", target_id=voucher_id,
         student=db.get(Student, voucher.student_id), label=voucher.fee_month, amount=payload.amount,
     )
     db.commit()
@@ -385,7 +398,7 @@ def apply_discount(
     voucher.discount_reason = payload.reason or None
     voucher.status = _recompute_status(float(voucher.total_amount), float(voucher.paid_amount), payload.amount)
     audit_service.record(
-        db, current_user, action="discount", target_type="fee_voucher",
+        db, current_user, action="discount", target_type="fee_voucher", target_id=voucher_id,
         student=db.get(Student, voucher.student_id), label=voucher.fee_month,
         amount=payload.amount, reason=payload.reason,
     )
@@ -415,7 +428,7 @@ def bulk_pay(
         voucher.status = _recompute_status(float(voucher.total_amount), float(voucher.paid_amount), float(voucher.discount_amount))
         db.add(PaymentHistory(target_type="fee_voucher", target_id=voucher.voucher_id, amount=amount, paid_at=datetime.now()))
         audit_service.record(
-            db, current_user, action="payment", target_type="fee_voucher",
+            db, current_user, action="payment", target_type="fee_voucher", target_id=voucher.voucher_id,
             student=db.get(Student, voucher.student_id), label=voucher.fee_month, amount=amount,
             note="bulk pay",
         )
@@ -558,9 +571,15 @@ def delete_voucher(
     if voucher is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Voucher not found")
     audit_service.record(
-        db, current_user, action="delete", target_type="fee_voucher",
+        db, current_user, action="delete", target_type="fee_voucher", target_id=voucher_id,
         student=db.get(Student, voucher.student_id), label=voucher.fee_month,
         note=f"total={voucher.total_amount}, paid={voucher.paid_amount}, discount={voucher.discount_amount}",
+    )
+    # The voucher's payments no longer correspond to anything — void them so
+    # they drop out of the accountant's collections total.
+    audit_service.void_for_target(
+        db, target_type="fee_voucher", target_id=voucher_id,
+        student_id=voucher.student_id, label=voucher.fee_month,
     )
     db.delete(voucher)
     db.commit()
@@ -584,7 +603,7 @@ def edit_voucher(
     voucher.discount_reason = payload.discount_reason
     voucher.status = _recompute_status(payload.total_amount, payload.paid_amount, payload.discount_amount)
     audit_service.record(
-        db, current_user, action="edit", target_type="fee_voucher",
+        db, current_user, action="edit", target_type="fee_voucher", target_id=voucher_id,
         student=db.get(Student, voucher.student_id), label=voucher.fee_month,
         amount=payload.total_amount, reason=payload.discount_reason,
         note=f"total={payload.total_amount}, paid={payload.paid_amount}, discount={payload.discount_amount}",

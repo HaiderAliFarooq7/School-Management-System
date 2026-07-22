@@ -96,7 +96,7 @@ def pay_charge(
     charge.status = "Paid" if new_remaining <= 0 else "Open"
     db.add(PaymentHistory(target_type="extra_charge", target_id=charge_id, amount=payload.amount, paid_at=datetime.now()))
     audit_service.record(
-        db, current_user, action="payment", target_type="extra_charge",
+        db, current_user, action="payment", target_type="extra_charge", target_id=charge_id,
         student=db.get(Student, charge.student_id), label=charge.description, amount=payload.amount,
     )
     db.commit()
@@ -125,7 +125,7 @@ def apply_discount(
     charge.remaining_amount = max(new_remaining, 0)
     charge.status = "Paid" if new_remaining <= 0 else "Open"
     audit_service.record(
-        db, current_user, action="discount", target_type="extra_charge",
+        db, current_user, action="discount", target_type="extra_charge", target_id=charge_id,
         student=db.get(Student, charge.student_id), label=charge.description,
         amount=payload.amount, reason=payload.reason,
     )
@@ -134,7 +134,10 @@ def apply_discount(
 
 
 @router.post("/bulk-delete", response_model=BulkDeleteChargesResult, dependencies=[require_admin])
-def bulk_delete_charges(payload: BulkDeleteChargesRequest, db: Session = Depends(get_db)):
+def bulk_delete_charges(
+    payload: BulkDeleteChargesRequest, db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
     """Admin-only: delete a hand-picked set of extra charges outright, even
     ones that already have a payment or discount recorded."""
     charges = db.execute(
@@ -143,6 +146,15 @@ def bulk_delete_charges(payload: BulkDeleteChargesRequest, db: Session = Depends
     found_ids = {c.charge_id for c in charges}
     skipped = [{"charge_id": cid, "reason": "Charge not found"} for cid in payload.charge_ids if cid not in found_ids]
     for charge in charges:
+        audit_service.record(
+            db, current_user, action="delete", target_type="extra_charge", target_id=charge.charge_id,
+            student=db.get(Student, charge.student_id), label=charge.description,
+            note=f"amount={charge.amount}, paid={charge.paid_amount}",
+        )
+        audit_service.void_for_target(
+            db, target_type="extra_charge", target_id=charge.charge_id,
+            student_id=charge.student_id, label=charge.description,
+        )
         db.delete(charge)
     db.commit()
     return BulkDeleteChargesResult(deleted=len(charges), skipped=skipped)
@@ -159,9 +171,14 @@ def delete_charge(
     if charge is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Charge not found")
     audit_service.record(
-        db, current_user, action="delete", target_type="extra_charge",
+        db, current_user, action="delete", target_type="extra_charge", target_id=charge_id,
         student=db.get(Student, charge.student_id), label=charge.description,
         note=f"amount={charge.amount}, paid={charge.paid_amount}",
+    )
+    # Void this charge's payments so they leave the collections totals.
+    audit_service.void_for_target(
+        db, target_type="extra_charge", target_id=charge_id,
+        student_id=charge.student_id, label=charge.description,
     )
     db.delete(charge)
     db.commit()
@@ -187,7 +204,7 @@ def edit_charge(
     charge.remaining_amount = max(remaining, 0)
     charge.status = "Paid" if remaining <= 0 else "Open"
     audit_service.record(
-        db, current_user, action="edit", target_type="extra_charge",
+        db, current_user, action="edit", target_type="extra_charge", target_id=charge_id,
         student=db.get(Student, charge.student_id), label=payload.description,
         amount=payload.amount, reason=payload.discount_reason,
         note=f"amount={payload.amount}, paid={payload.paid_amount}, discount={payload.discount_amount}",

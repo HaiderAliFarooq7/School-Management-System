@@ -6,6 +6,7 @@ the username hiccups, we still record the action with what we know.
 """
 from __future__ import annotations
 
+from sqlalchemy import and_, or_, update
 from sqlalchemy.orm import Session
 
 from app.deps import CurrentUser
@@ -20,6 +21,7 @@ def record(
     *,
     action: str,
     target_type: str,
+    target_id: int | None = None,
     student: Student | None = None,
     label: str = "",
     amount: float | None = None,
@@ -46,6 +48,7 @@ def record(
                 actor_role=role,
                 action=action,
                 target_type=target_type,
+                target_id=target_id,
                 student_id=student.student_id if student is not None else None,
                 student_name=student.name if student is not None else "",
                 label=(label or "")[:120],
@@ -55,4 +58,38 @@ def record(
             )
         )
     except Exception:  # noqa: BLE001 — auditing must never break the money action
+        pass
+
+
+def void_for_target(
+    db: Session,
+    *,
+    target_type: str,
+    target_id: int,
+    student_id: int | None = None,
+    label: str | None = None,
+) -> None:
+    """Mark a deleted voucher/charge's money entries as voided so they stop
+    counting toward collections. Matches on ``target_id`` (exact, for entries
+    recorded since target_id existed) OR, as a fallback for older entries that
+    predate the column, on target_type + student_id + label. Staged in the
+    caller's transaction; never raises."""
+    try:
+        match = FeeAuditLog.target_id == target_id
+        if student_id is not None and label is not None:
+            match = or_(
+                match,
+                and_(
+                    FeeAuditLog.target_id.is_(None),
+                    FeeAuditLog.target_type == target_type,
+                    FeeAuditLog.student_id == student_id,
+                    FeeAuditLog.label == (label or "")[:120],
+                ),
+            )
+        db.execute(
+            update(FeeAuditLog)
+            .where(FeeAuditLog.target_type == target_type, match)
+            .values(voided=True)
+        )
+    except Exception:  # noqa: BLE001 — must never break the delete
         pass
