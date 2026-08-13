@@ -100,6 +100,7 @@ function StudentLedger({ studentId }: { studentId: number }) {
   const queryClient = useQueryClient()
   const { role } = useAuth()
   const isAdmin = role === 'Admin'
+  const isAccountant = role === 'Accountant'
   const toast = useToast()
   const confirmAction = useConfirm()
   const { data: student } = useQuery({ queryKey: ['student', studentId], queryFn: () => getStudent(studentId) })
@@ -202,6 +203,14 @@ function StudentLedger({ studentId }: { studentId: number }) {
 
   const defaultGenAmount = grades?.find((g) => g.class_name === student.class_name)?.fee_amount ?? 0
 
+  // Accountants get a decluttered ledger: paid vouchers more than 3 months
+  // old drop off the list (they can still be found via reports/PDF export).
+  const threeMonthsAgo = new Date()
+  threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3)
+  const visibleVouchers = isAccountant
+    ? sheet.vouchers.filter((v) => v.status !== 'Paid' || new Date(v.fee_month) >= threeMonthsAgo)
+    : sheet.vouchers
+
   return (
     <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 3, alignItems: 'flex-start' }}>
       <Box sx={{ flex: 1, minWidth: 0, width: '100%' }}>
@@ -219,7 +228,7 @@ function StudentLedger({ studentId }: { studentId: number }) {
       </Typography>
 
       <Grid container spacing={2} sx={{ mb: 1, mt: 1 }}>
-        <Grid size={{ xs: 12, sm: 4 }}>
+        <Grid size={{ xs: 12, sm: isAccountant ? 6 : 4 }}>
           <Card>
             <CardContent>
               <Typography color="text.secondary">Total Fees Due</Typography>
@@ -227,15 +236,17 @@ function StudentLedger({ studentId }: { studentId: number }) {
             </CardContent>
           </Card>
         </Grid>
-        <Grid size={{ xs: 12, sm: 4 }}>
-          <Card>
-            <CardContent>
-              <Typography color="text.secondary">Total Paid</Typography>
-              <Typography variant="h5">Rs. {sheet.total_paid.toFixed(0)}</Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid size={{ xs: 12, sm: 4 }}>
+        {!isAccountant && (
+          <Grid size={{ xs: 12, sm: 4 }}>
+            <Card>
+              <CardContent>
+                <Typography color="text.secondary">Total Paid</Typography>
+                <Typography variant="h5">Rs. {sheet.total_paid.toFixed(0)}</Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+        )}
+        <Grid size={{ xs: 12, sm: isAccountant ? 6 : 4 }}>
           <Card sx={{ bgcolor: sheet.total_pending > 0 ? 'error.50' : undefined }}>
             <CardContent>
               <Typography color="text.secondary">Total Pending</Typography>
@@ -273,7 +284,7 @@ function StudentLedger({ studentId }: { studentId: number }) {
           </TableRow>
         </TableHead>
         <TableBody>
-          {sheet.vouchers.map((v) => {
+          {visibleVouchers.map((v) => {
             const remaining = Math.max(v.total_amount - v.paid_amount - v.discount_amount, 0)
             const key = `v-${v.voucher_id}`
             return (
@@ -335,10 +346,14 @@ function StudentLedger({ studentId }: { studentId: number }) {
               </TableRow>
             )
           })}
-          {sheet.vouchers.length === 0 && (
+          {visibleVouchers.length === 0 && (
             <TableRow>
               <TableCell colSpan={7}>
-                <Typography color="text.secondary" sx={{ py: 1 }}>No vouchers yet — generate one below.</Typography>
+                <Typography color="text.secondary" sx={{ py: 1 }}>
+                  {sheet.vouchers.length === 0
+                    ? 'No vouchers yet — generate one below.'
+                    : 'No recent vouchers — older paid vouchers are hidden.'}
+                </Typography>
               </TableCell>
             </TableRow>
           )}
