@@ -16,6 +16,7 @@ There is no supported local/dev runtime — the backend refuses to start without
 - **Students**: CRUD, search, advanced search, admission form with an optional **per-student default fee** (overrides the class fee for that student in all future voucher generation).
 - **Grades**: CRUD with in-use delete guard.
 - **Fees**: vouchers (generate/pay/delete), **bulk voucher generation class-wise**, extra charges (add/pay/delete), fee reports (monthly collection, class summary, overdue list, balance sheet), dashboard stats.
+- **Expenses & salaries** (Admin only): record money going out — salaries (with staff name and the month the salary covers), utilities, rent, supplies, maintenance, transport. Shows fees collected vs expenses vs **net profit/loss** for any date range, a per-category breakdown, and a monthly income-vs-expenses chart. Income is read from the same `fee_audit_log` payment rows the **Collections** page reconciles against, so the two never disagree.
 - **Attendance**: per-class/date marking grid (Present/Absent/Late/Leave), monthly summary. Admin, Teachers and Accountants can mark/view attendance for **all classes** (Teachers default to their own class).
 - **Backup & restore**: on-demand `pg_dump` that streams straight to the browser and is never stored on the server, restore from an uploaded `.dump`, Excel export/import of students, full data reset (keeps school settings/users).
 - **User management**: create/deactivate users, assign roles and (for Teachers) a class. Any user can change their own password from the account menu.
