@@ -15,6 +15,7 @@ import com.bfhs.parent.data.local.SchoolDao
 import com.bfhs.parent.data.local.StudentDao
 import com.bfhs.parent.data.network.AuthInterceptor
 import com.bfhs.parent.data.network.BfhsApiService
+import com.bfhs.parent.data.network.UnauthorizedInterceptor
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -40,7 +41,10 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideOkHttpClient(authInterceptor: AuthInterceptor): OkHttpClient {
+    fun provideOkHttpClient(
+        authInterceptor: AuthInterceptor,
+        unauthorizedInterceptor: UnauthorizedInterceptor,
+    ): OkHttpClient {
         // Full request/response logging (URL, method, headers, body, status) in
         // debug builds; nothing in release. Visible in Logcat under the "OkHttp"
         // tag. The Authorization header is redacted so JWTs aren't logged raw.
@@ -51,6 +55,9 @@ object AppModule {
         }
         return OkHttpClient.Builder()
             .addInterceptor(authInterceptor)
+            // Must sit after authInterceptor so it sees the response to an
+            // already-authenticated request and can drop an expired session.
+            .addInterceptor(unauthorizedInterceptor)
             .addInterceptor(logging)
             // The backend runs on Render's free tier, which spins down when idle
             // and can take ~50s to cold-start. Generous timeouts stop that first
