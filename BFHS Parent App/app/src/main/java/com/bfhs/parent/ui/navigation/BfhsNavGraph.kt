@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -19,6 +20,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -42,6 +44,7 @@ import com.bfhs.parent.ui.screens.settings.SettingsScreen
 import com.bfhs.parent.ui.screens.splash.SplashScreen
 import com.bfhs.parent.ui.screens.studentdetail.StudentDetailScreen
 import com.bfhs.parent.ui.theme.BfhsColors
+import com.bfhs.parent.ui.viewmodel.AuthViewModel
 
 private val TAB_ROUTES = setOf(Routes.DASHBOARD, Routes.NOTIFICATIONS, Routes.SETTINGS)
 
@@ -61,6 +64,25 @@ fun BfhsNavGraph(
     // never reaches Home.
     var pendingNotificationType by remember { mutableStateOf(notificationType) }
     var pendingNotificationStudentId by remember { mutableStateOf(notificationStudentId) }
+
+    // The session can be dropped from under the app at any moment: the backend
+    // issues 8-hour JWTs, and UnauthorizedInterceptor clears the stored token
+    // the first time one is rejected. Watching it here is what turns that into
+    // a trip back to Login, instead of leaving the parent on a dashboard where
+    // every request silently fails. Splash and Login do their own routing, so
+    // they are excluded.
+    val sessionViewModel: AuthViewModel = hiltViewModel()
+    val loggedIn by sessionViewModel.isLoggedIn.collectAsState()
+    LaunchedEffect(loggedIn, currentRoute) {
+        if (loggedIn == false && currentRoute != null &&
+            currentRoute != Routes.LOGIN && currentRoute != Routes.SPLASH
+        ) {
+            navController.navigate(Routes.LOGIN) {
+                popUpTo(0) { inclusive = true }
+                launchSingleTop = true
+            }
+        }
+    }
 
     // Background fills the whole screen (behind the system bars); the content is
     // then inset so no top bar hides under the clock/notch and the floating nav
