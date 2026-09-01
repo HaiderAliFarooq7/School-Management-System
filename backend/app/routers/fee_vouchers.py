@@ -541,15 +541,17 @@ def get_all_students_vouchers_pdf(
 
 @router.get("/pdf/student/{student_id}")
 def get_single_student_dues_pdf(student_id: int, note: str = "", db: Session = Depends(get_db)):
-    """One challan for a single student's complete pending dues — the
-    'print just this one' option."""
+    """One student's complete pending dues, laid out 4-up on a single A4
+    sheet (one filled quadrant, three left blank) — printing a lone challan
+    on a full page wastes 3/4 of the sheet, so this always uses the 4-up
+    layout, the same as the multi-student challan run."""
     student = db.get(Student, student_id)
     if student is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Student not found")
 
     buffer = io.BytesIO()
     try:
-        voucher_pdf.generate_single_student_dues_pdf(db, student, buffer, note=note or None)
+        voucher_pdf.generate_all_dues_4_per_sheet_pdf(db, [student], buffer, note=note or None)
     except ValueError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc))
     buffer.seek(0)
@@ -557,6 +559,33 @@ def get_single_student_dues_pdf(student_id: int, note: str = "", db: Session = D
     return StreamingResponse(
         buffer, media_type="application/pdf",
         headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
+
+
+@router.get("/pdf/students")
+def get_students_dues_pdf(student_ids: str, note: str = "", db: Session = Depends(get_db)):
+    """Complete pending dues for an explicit list of students (e.g. a
+    student plus their siblings), 4-up on as many A4 sheets as needed —
+    the last sheet leaves blank quadrants rather than wasting a full page
+    per student. Students with nothing outstanding are skipped."""
+    ids = [int(x) for x in student_ids.split(",") if x.strip()]
+    if not ids:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "No student ids given")
+    students = db.execute(select(Student).where(Student.student_id.in_(ids))).scalars().all()
+    if not students:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No matching students found")
+    order = {sid: i for i, sid in enumerate(ids)}
+    students = sorted(students, key=lambda s: order.get(s.student_id, 0))
+
+    buffer = io.BytesIO()
+    try:
+        voucher_pdf.generate_all_dues_4_per_sheet_pdf(db, students, buffer, note=note or None)
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc))
+    buffer.seek(0)
+    return StreamingResponse(
+        buffer, media_type="application/pdf",
+        headers={"Content-Disposition": "attachment; filename=challans.pdf"},
     )
 
 

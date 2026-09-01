@@ -156,3 +156,10 @@ export async function downloadStudentChallan(studentId: number, note?: string) {
     note: note ?? '',
   }, `student_${studentId}_challan.pdf`)
 }
+
+export async function downloadStudentsChallan(studentIds: number[], note?: string) {
+  await downloadFile('/fee-vouchers/pdf/students', {
+    student_ids: studentIds.join(','),
+    note: note ?? '',
+  }, 'challans.pdf')
+}

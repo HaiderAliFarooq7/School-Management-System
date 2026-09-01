@@ -8,11 +8,13 @@ import {
 import { getBalanceSheet } from '../api/feeReports'
 import { getStudent, getSiblings, listStudents, type Sibling } from '../api/students'
 import { downloadFile } from '../api/client'
-import { applyVoucherDiscount, deleteVoucher, editVoucher, generateVoucher, payVoucher } from '../api/feeVouchers'
+import { applyVoucherDiscount, deleteVoucher, downloadStudentChallan, downloadStudentsChallan, editVoucher, generateVoucher, payVoucher } from '../api/feeVouchers'
 import { addCharge, applyChargeDiscount, deleteCharge, editCharge, payCharge } from '../api/extraCharges'
 import { listGrades } from '../api/grades'
 import QrCodeScannerIcon from '@mui/icons-material/QrCodeScanner'
 import EditIcon from '@mui/icons-material/Edit'
+import PrintIcon from '@mui/icons-material/Print'
+import GroupsIcon from '@mui/icons-material/Groups'
 import { DiscountDialog } from '../components/DiscountDialog'
 import { EditFigureDialog } from '../components/EditFigureDialog'
 import { StudentEditDialog } from '../components/StudentEditDialog'
@@ -106,6 +108,15 @@ function StudentLedger({ studentId }: { studentId: number }) {
   const { data: student } = useQuery({ queryKey: ['student', studentId], queryFn: () => getStudent(studentId) })
   const { data: sheet } = useQuery({ queryKey: ['balance-sheet', studentId], queryFn: () => getBalanceSheet(studentId) })
   const { data: grades } = useQuery({ queryKey: ['grades'], queryFn: listGrades })
+  const { data: siblings } = useQuery({ queryKey: ['siblings', studentId], queryFn: () => getSiblings(studentId) })
+  const printingChallan = useMutation({
+    mutationFn: () => downloadStudentChallan(studentId),
+    onError: (e) => toast(apiErrorMessage(e), 'error'),
+  })
+  const printingChallanWithSiblings = useMutation({
+    mutationFn: () => downloadStudentsChallan([studentId, ...(siblings ?? []).map((s) => s.student_id)]),
+    onError: (e) => toast(apiErrorMessage(e), 'error'),
+  })
 
   const [payAmounts, setPayAmounts] = useState<Record<string, string>>({})
   const [discountTarget, setDiscountTarget] = useState<{ type: 'voucher' | 'charge'; id: number; max: number } | null>(null)
@@ -203,13 +214,15 @@ function StudentLedger({ studentId }: { studentId: number }) {
 
   const defaultGenAmount = grades?.find((g) => g.class_name === student.class_name)?.fee_amount ?? 0
 
-  // Accountants get a decluttered ledger: paid vouchers more than 3 months
-  // old drop off the list (they can still be found via reports/PDF export).
-  const threeMonthsAgo = new Date()
-  threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3)
+  // Accountants get a decluttered ledger: only what still needs collecting
+  // (Pending/Partial/Unpaid/Open) — fully paid vouchers and charges are
+  // hidden entirely (still visible to Admin, and via reports/PDF export).
   const visibleVouchers = isAccountant
-    ? sheet.vouchers.filter((v) => v.status !== 'Paid' || new Date(v.fee_month) >= threeMonthsAgo)
+    ? sheet.vouchers.filter((v) => v.status !== 'Paid')
     : sheet.vouchers
+  const visibleCharges = isAccountant
+    ? sheet.charges.filter((c) => c.status !== 'Paid')
+    : sheet.charges
 
   return (
     <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 3, alignItems: 'flex-start' }}>
@@ -222,31 +235,49 @@ function StudentLedger({ studentId }: { studentId: number }) {
         <Button size="small" variant="outlined" startIcon={<EditIcon fontSize="small" />} onClick={() => setEditStudentOpen(true)}>
           Edit Student
         </Button>
+        <Button
+          size="small" variant="outlined" startIcon={<PrintIcon fontSize="small" />}
+          disabled={printingChallan.isPending}
+          onClick={() => printingChallan.mutate()}
+        >
+          Print Challan
+        </Button>
+        {siblings && siblings.length > 0 && (
+          <Button
+            size="small" variant="outlined" startIcon={<GroupsIcon fontSize="small" />}
+            disabled={printingChallanWithSiblings.isPending}
+            onClick={() => printingChallanWithSiblings.mutate()}
+          >
+            Print Challan (+ Siblings)
+          </Button>
+        )}
       </Box>
       <Typography color="text.secondary" gutterBottom>
         Class: {student.class_name} · Father: {student.father_name} · Phone: {student.phone || '—'} · CNIC: {student.cnic || '—'}
       </Typography>
 
       <Grid container spacing={2} sx={{ mb: 1, mt: 1 }}>
-        <Grid size={{ xs: 12, sm: isAccountant ? 6 : 4 }}>
-          <Card>
-            <CardContent>
-              <Typography color="text.secondary">Total Fees Due</Typography>
-              <Typography variant="h5">Rs. {sheet.total_fees_due.toFixed(0)}</Typography>
-            </CardContent>
-          </Card>
-        </Grid>
         {!isAccountant && (
-          <Grid size={{ xs: 12, sm: 4 }}>
-            <Card>
-              <CardContent>
-                <Typography color="text.secondary">Total Paid</Typography>
-                <Typography variant="h5">Rs. {sheet.total_paid.toFixed(0)}</Typography>
-              </CardContent>
-            </Card>
-          </Grid>
+          <>
+            <Grid size={{ xs: 12, sm: 4 }}>
+              <Card>
+                <CardContent>
+                  <Typography color="text.secondary">Total Fees Due</Typography>
+                  <Typography variant="h5">Rs. {sheet.total_fees_due.toFixed(0)}</Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid size={{ xs: 12, sm: 4 }}>
+              <Card>
+                <CardContent>
+                  <Typography color="text.secondary">Total Paid</Typography>
+                  <Typography variant="h5">Rs. {sheet.total_paid.toFixed(0)}</Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+          </>
         )}
-        <Grid size={{ xs: 12, sm: isAccountant ? 6 : 4 }}>
+        <Grid size={{ xs: 12, sm: isAccountant ? 12 : 4 }}>
           <Card sx={{ bgcolor: sheet.total_pending > 0 ? 'error.50' : undefined }}>
             <CardContent>
               <Typography color="text.secondary">Total Pending</Typography>
@@ -352,7 +383,7 @@ function StudentLedger({ studentId }: { studentId: number }) {
                 <Typography color="text.secondary" sx={{ py: 1 }}>
                   {sheet.vouchers.length === 0
                     ? 'No vouchers yet — generate one below.'
-                    : 'No recent vouchers — older paid vouchers are hidden.'}
+                    : 'No pending vouchers — paid vouchers are hidden.'}
                 </Typography>
               </TableCell>
             </TableRow>
@@ -395,7 +426,7 @@ function StudentLedger({ studentId }: { studentId: number }) {
           </TableRow>
         </TableHead>
         <TableBody>
-          {sheet.charges.map((c) => {
+          {visibleCharges.map((c) => {
             const remaining = Math.max(c.amount - c.paid_amount - c.discount_amount, 0)
             const key = `c-${c.charge_id}`
             return (
@@ -453,10 +484,14 @@ function StudentLedger({ studentId }: { studentId: number }) {
               </TableRow>
             )
           })}
-          {sheet.charges.length === 0 && (
+          {visibleCharges.length === 0 && (
             <TableRow>
               <TableCell colSpan={6}>
-                <Typography color="text.secondary" sx={{ py: 1 }}>No extra charges.</Typography>
+                <Typography color="text.secondary" sx={{ py: 1 }}>
+                  {sheet.charges.length === 0
+                    ? 'No extra charges.'
+                    : 'No pending charges — paid charges are hidden.'}
+                </Typography>
               </TableCell>
             </TableRow>
           )}
