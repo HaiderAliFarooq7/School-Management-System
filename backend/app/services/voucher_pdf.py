@@ -389,22 +389,6 @@ def _students_with_dues(db: Session, students: list[Student]) -> list[tuple[Stud
     return pairs
 
 
-def generate_single_student_dues_pdf(db: Session, student: Student, dest_path: str, note: str | None = None) -> str:
-    """One full-page A4 challan for a single student's complete pending dues
-    — the 'print just this one challan' option."""
-    data = gather_student_dues(db, student)
-    if not data["rows"]:
-        raise ValueError("This student has no pending dues to print.")
-
-    c = canvas.Canvas(dest_path, pagesize=A4)
-    width, height = A4
-    margin = 6 * mm
-    _draw_receipt(c, db, margin, margin, width - 2 * margin, height - 2 * margin, student, data, note=note)
-    c.showPage()
-    c.save()
-    return dest_path
-
-
 def generate_all_dues_individual_pdf(db: Session, students: list[Student], dest_path: str, note: str | None = None) -> str:
     """One full-size A4 challan per student, listing every pending month plus
     open extra charges — skips students with nothing outstanding."""

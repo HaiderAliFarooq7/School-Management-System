@@ -6,12 +6,15 @@ import {
 } from '@mui/material'
 import EditIcon from '@mui/icons-material/Edit'
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong'
+import PrintIcon from '@mui/icons-material/Print'
 import { useNavigate } from 'react-router-dom'
 import { listStudents, type Student } from '../api/students'
 import { listGrades } from '../api/grades'
+import { downloadStudentChallan } from '../api/feeVouchers'
 import { exportStudents } from '../api/studentImport'
 import { StudentEditDialog } from '../components/StudentEditDialog'
 import { StudentImportWizard } from '../components/StudentImportWizard'
+import { useToast } from '../components/feedback'
 import { useAuth } from '../context/AuthContext'
 import { useDebouncedValue } from '../hooks/useDebouncedValue'
 import { usePhoneColumns } from '../hooks/usePhoneColumns'
@@ -20,6 +23,19 @@ export function StudentsPage() {
   const navigate = useNavigate()
   const { role } = useAuth()
   const isAdmin = role === 'Admin'
+  const toast = useToast()
+  const [printingId, setPrintingId] = useState<number | null>(null)
+
+  async function handlePrintChallan(student: Student) {
+    setPrintingId(student.student_id)
+    try {
+      await downloadStudentChallan(student.student_id)
+    } catch (e) {
+      toast(String((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? e), 'error')
+    } finally {
+      setPrintingId(null)
+    }
+  }
   const phoneColumns = usePhoneColumns(['registration_no', 'father_name', 'class_name', 'phone', 'status', 'fee_status'])
   const [search, setSearch] = useState('')
   const [classFilter, setClassFilter] = useState('')
@@ -80,7 +96,7 @@ export function StudentsPage() {
     {
       field: 'actions',
       headerName: 'Actions',
-      width: 90,
+      width: 125,
       sortable: false,
       renderCell: (params) => (
         <Box sx={{ display: 'flex' }}>
@@ -88,6 +104,18 @@ export function StudentsPage() {
             <IconButton size="small" aria-label={`View dues of ${params.row.name}`} onClick={() => navigate(`/fees/student/${params.row.student_id}`)}>
               <ReceiptLongIcon fontSize="small" />
             </IconButton>
+          </Tooltip>
+          <Tooltip title="Print challan">
+            <span>
+              <IconButton
+                size="small"
+                aria-label={`Print challan for ${params.row.name}`}
+                disabled={printingId === params.row.student_id}
+                onClick={() => handlePrintChallan(params.row)}
+              >
+                <PrintIcon fontSize="small" />
+              </IconButton>
+            </span>
           </Tooltip>
           <Tooltip title="Edit student">
             <IconButton size="small" aria-label={`Edit ${params.row.name}`} onClick={() => setEditing(params.row)}>
