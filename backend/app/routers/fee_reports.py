@@ -2,7 +2,7 @@ import datetime
 import io
 
 import openpyxl
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -334,11 +334,47 @@ def get_student_balance_sheet(student_id: int, db: Session = Depends(get_db)):
     }
 
 
+_MONTH_NAMES = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December",
+]
+
+
+def _shift_month(year: int, month: int, delta: int) -> tuple[int, int]:
+    total = year * 12 + (month - 1) + delta
+    return total // 12, total % 12 + 1
+
+
+def _month_stats(vouchers: list[FeeVoucher], year: int, month: int) -> dict:
+    sort_key = f"{year:04d}-{month:02d}"
+    month_vouchers = [v for v in vouchers if v.fee_month_sort == sort_key]
+    billed = sum(float(v.total_amount) for v in month_vouchers)
+    collected = sum(float(v.paid_amount) for v in month_vouchers)
+    discounted = sum(float(v.discount_amount) for v in month_vouchers)
+    return {
+        "year": year,
+        "month": month,
+        "label": f"{_MONTH_NAMES[month - 1]} {year}",
+        "billed": billed,
+        "collected": collected,
+        "discounted": discounted,
+        "pending": max(billed - collected - discounted, 0),
+    }
+
+
 @router.get("/analytics", dependencies=[require_admin])
-def get_fee_analytics(months: int = 6, class_name: str = "", db: Session = Depends(get_db)):
+def get_fee_analytics(
+    months: int = Query(6, ge=1, le=60),
+    class_name: str = "",
+    year: int | None = Query(None, ge=1970, le=9999),
+    month: int | None = Query(None, ge=1, le=12),
+    db: Session = Depends(get_db),
+):
     """Admin-only: the complete school fee/charges picture — totals, a
-    per-class breakdown, a month-by-month collection trend, and voucher
-    status counts — with an optional class filter."""
+    per-class breakdown, a month-by-month collection trend, voucher status
+    (both counts and Rs. amounts), and a specific-month spotlight (defaults
+    to the current month, or the given year/month) alongside the previous
+    month for quick this-vs-last comparison — with an optional class filter."""
     voucher_query = select(FeeVoucher).join(Student, Student.student_id == FeeVoucher.student_id)
     if class_name:
         voucher_query = voucher_query.where(Student.class_name == class_name)
@@ -349,8 +385,21 @@ def get_fee_analytics(months: int = 6, class_name: str = "", db: Session = Depen
     total_discounted = sum(float(v.discount_amount) for v in vouchers)
     total_outstanding = max(total_billed - total_collected - total_discounted, 0)
     status_counts = {"Paid": 0, "Partial": 0, "Unpaid": 0}
+    status_amounts = {"Paid": 0.0, "Partial": 0.0, "Unpaid": 0.0}
     for v in vouchers:
         status_counts[v.status] = status_counts.get(v.status, 0) + 1
+        pending = max(float(v.total_amount) - float(v.paid_amount) - float(v.discount_amount), 0)
+        # Paid shows the amount actually collected; Partial/Unpaid show what's
+        # still outstanding — together these are the Rs. figures worth
+        # charting, rather than a bare voucher count.
+        amount = float(v.paid_amount) if v.status == "Paid" else pending
+        status_amounts[v.status] = status_amounts.get(v.status, 0.0) + amount
+
+    today = datetime.date.today()
+    sel_year, sel_month = year or today.year, month or today.month
+    prev_year, prev_month = _shift_month(sel_year, sel_month, -1)
+    selected_month = _month_stats(vouchers, sel_year, sel_month)
+    previous_month = _month_stats(vouchers, prev_year, prev_month)
 
     charge_query = select(ExtraCharge)
     if class_name:
@@ -389,17 +438,15 @@ def get_fee_analytics(months: int = 6, class_name: str = "", db: Session = Depen
             "pending": max(total - collected - discounted, 0),
         })
 
-    today = datetime.date.today()
     monthly_trend = []
     y, m = today.year, today.month
     for _ in range(months):
-        sort_key = f"{y:04d}-{m:02d}"
-        month_vouchers = [v for v in vouchers if v.fee_month_sort == sort_key]
+        stats = _month_stats(vouchers, y, m)
         monthly_trend.append({
-            "month": sort_key,
-            "billed": sum(float(v.total_amount) for v in month_vouchers),
-            "collected": sum(float(v.paid_amount) for v in month_vouchers),
-            "discounted": sum(float(v.discount_amount) for v in month_vouchers),
+            "month": f"{y:04d}-{m:02d}",
+            "billed": stats["billed"],
+            "collected": stats["collected"],
+            "discounted": stats["discounted"],
         })
         m -= 1
         if m == 0:
@@ -413,6 +460,9 @@ def get_fee_analytics(months: int = 6, class_name: str = "", db: Session = Depen
         "total_discounted": total_discounted,
         "total_outstanding": total_outstanding,
         "voucher_status_counts": status_counts,
+        "voucher_status_amounts": status_amounts,
+        "selected_month": selected_month,
+        "previous_month": previous_month,
         "charges_total": charges_total,
         "charges_collected": charges_collected,
         "charges_discounted": charges_discounted,

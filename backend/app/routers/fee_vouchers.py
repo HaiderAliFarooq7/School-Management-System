@@ -568,7 +568,10 @@ def get_students_dues_pdf(student_ids: str, note: str = "", db: Session = Depend
     student plus their siblings), 4-up on as many A4 sheets as needed —
     the last sheet leaves blank quadrants rather than wasting a full page
     per student. Students with nothing outstanding are skipped."""
-    ids = [int(x) for x in student_ids.split(",") if x.strip()]
+    try:
+        ids = [int(x) for x in student_ids.split(",") if x.strip()]
+    except ValueError:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "student_ids must be a comma-separated list of numbers")
     if not ids:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "No student ids given")
     students = db.execute(select(Student).where(Student.student_id.in_(ids))).scalars().all()

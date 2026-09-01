@@ -100,12 +100,25 @@ export async function downloadPendingReportExcel(params: { class_names?: string[
   }, 'pending_fee_report.xlsx')
 }
 
+export interface MonthSpotlight {
+  year: number
+  month: number
+  label: string
+  billed: number
+  collected: number
+  discounted: number
+  pending: number
+}
+
 export interface FeeAnalytics {
   total_billed: number
   total_collected: number
   total_discounted: number
   total_outstanding: number
   voucher_status_counts: Record<string, number>
+  voucher_status_amounts: Record<string, number>
+  selected_month: MonthSpotlight
+  previous_month: MonthSpotlight
   charges_total: number
   charges_collected: number
   charges_discounted: number
@@ -114,7 +127,9 @@ export interface FeeAnalytics {
   monthly_trend: { month: string; billed: number; collected: number; discounted: number }[]
 }
 
-export async function getFeeAnalytics(months = 6, class_name = ''): Promise<FeeAnalytics> {
-  const { data } = await apiClient.get<FeeAnalytics>('/fee-reports/analytics', { params: { months, class_name } })
+export async function getFeeAnalytics(months = 6, class_name = '', year?: number, month?: number): Promise<FeeAnalytics> {
+  const { data } = await apiClient.get<FeeAnalytics>('/fee-reports/analytics', {
+    params: { months, class_name, year, month },
+  })
   return data
 }
