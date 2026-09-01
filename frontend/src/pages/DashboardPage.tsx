@@ -11,6 +11,10 @@ import PersonAddIcon from '@mui/icons-material/PersonAdd'
 import PaidIcon from '@mui/icons-material/Paid'
 import QrCodeScannerIcon from '@mui/icons-material/QrCodeScanner'
 import EventAvailableIcon from '@mui/icons-material/EventAvailable'
+import ReceiptLongIcon from '@mui/icons-material/ReceiptLong'
+import PendingActionsIcon from '@mui/icons-material/PendingActions'
+import TrendingUpIcon from '@mui/icons-material/TrendingUp'
+import TrendingDownIcon from '@mui/icons-material/TrendingDown'
 import { useNavigate } from 'react-router-dom'
 import { getAttendanceDailyStatus } from '../api/attendance'
 import { getDashboardStats } from '../api/dashboard'
@@ -170,13 +174,35 @@ export function DashboardPage() {
   )
 }
 
+// Last 12 months, newest first, for the month-spotlight picker.
+function buildMonthOptions(): { year: number; month: number; label: string }[] {
+  const opts = []
+  const now = new Date()
+  for (let i = 0; i < 12; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+    opts.push({
+      year: d.getFullYear(),
+      month: d.getMonth() + 1,
+      label: d.toLocaleString('en', { month: 'long', year: 'numeric' }),
+    })
+  }
+  return opts
+}
+
+function fmtRs(n: number) {
+  return `Rs. ${Math.round(n).toLocaleString()}`
+}
+
 function AnalyticsSection() {
   const { data: grades } = useQuery({ queryKey: ['grades'], queryFn: listGrades })
   const [classFilter, setClassFilter] = useState('')
   const [months, setMonths] = useState(6)
+  const monthOptions = buildMonthOptions()
+  const [monthKey, setMonthKey] = useState(`${monthOptions[0].year}-${monthOptions[0].month}`)
+  const [selYear, selMonth] = monthKey.split('-').map(Number)
   const { data, isLoading } = useQuery({
-    queryKey: ['dashboard-fee-analytics', classFilter, months],
-    queryFn: () => getFeeAnalytics(months, classFilter),
+    queryKey: ['dashboard-fee-analytics', classFilter, months, monthKey],
+    queryFn: () => getFeeAnalytics(months, classFilter, selYear, selMonth),
   })
 
   return (
@@ -189,12 +215,58 @@ function AnalyticsSection() {
           <MenuItem value="">All Classes</MenuItem>
           {grades?.map((g) => <MenuItem key={g.grade_id} value={g.class_name}>{g.class_name}</MenuItem>)}
         </Select>
+        <Select size="small" value={monthKey} onChange={(e) => setMonthKey(e.target.value)} sx={{ width: 190 }}>
+          {monthOptions.map((o) => (
+            <MenuItem key={`${o.year}-${o.month}`} value={`${o.year}-${o.month}`}>{o.label}</MenuItem>
+          ))}
+        </Select>
         <Select size="small" value={months} onChange={(e) => setMonths(Number(e.target.value))} sx={{ width: 160 }}>
           <MenuItem value={3}>Last 3 months</MenuItem>
           <MenuItem value={6}>Last 6 months</MenuItem>
           <MenuItem value={12}>Last 12 months</MenuItem>
         </Select>
       </Box>
+
+      {!isLoading && data && (
+        <Grid container spacing={2} sx={{ mb: 3 }}>
+          {[
+            { label: `${data.selected_month.label} — Billed`, value: data.selected_month.billed, icon: <ReceiptLongIcon />, color: '#1565c0' },
+            { label: `${data.selected_month.label} — Collected`, value: data.selected_month.collected, icon: <PaidIcon />, color: '#2e7d32' },
+            { label: `${data.selected_month.label} — Pending`, value: data.selected_month.pending, icon: <PendingActionsIcon />, color: '#c62828' },
+            { label: `${data.previous_month.label} — Pending`, value: data.previous_month.pending, icon: <PendingActionsIcon />, color: '#8d6e63' },
+          ].map((c) => (
+            <Grid key={c.label} size={{ xs: 12, sm: 6, md: 3 }}>
+              <Card sx={{ height: '100%' }}>
+                <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                  <Box sx={{ color: c.color, display: 'flex' }}>{c.icon}</Box>
+                  <Box>
+                    <Typography variant="body2" color="text.secondary">{c.label}</Typography>
+                    <Typography variant="h6">{fmtRs(c.value)}</Typography>
+                  </Box>
+                </CardContent>
+              </Card>
+            </Grid>
+          ))}
+          <Grid size={{ xs: 12 }}>
+            <Card>
+              <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                {data.selected_month.collected >= data.previous_month.collected ? (
+                  <TrendingUpIcon color="success" />
+                ) : (
+                  <TrendingDownIcon color="error" />
+                )}
+                <Typography variant="body2">
+                  Collected {fmtRs(data.selected_month.collected)} in {data.selected_month.label} vs {fmtRs(data.previous_month.collected)} in {data.previous_month.label}
+                  {' — '}
+                  {data.previous_month.pending > 0
+                    ? `${fmtRs(data.previous_month.pending)} still outstanding from ${data.previous_month.label}.`
+                    : `${data.previous_month.label} is fully settled.`}
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+        </Grid>
+      )}
 
       {isLoading || !data ? (
         <Grid container spacing={3}>
@@ -228,24 +300,32 @@ function AnalyticsSection() {
           <Grid size={{ xs: 12, md: 5 }}>
             <Card>
               <CardContent>
-                <Typography variant="subtitle1" gutterBottom>Voucher Status</Typography>
-                {Object.values(data.voucher_status_counts).some((v) => v > 0) ? (
+                <Typography variant="subtitle1" gutterBottom>Voucher Status (Rs.)</Typography>
+                {Object.values(data.voucher_status_amounts).some((v) => v > 0) ? (
                   <PieChart
                     height={300}
                     series={[{
-                      data: Object.entries(data.voucher_status_counts).map(([status, count]) => ({
-                        id: status, value: count, label: status,
-                        color: status === 'Paid' ? '#2e7d32' : status === 'Partial' ? '#ed6c02' : '#c62828',
-                      })),
+                      data: Object.entries(data.voucher_status_amounts)
+                        .filter(([, amount]) => amount > 0)
+                        .map(([status, amount]) => ({
+                          id: status, value: Math.round(amount), label: status,
+                          color: status === 'Paid' ? '#2e7d32' : status === 'Partial' ? '#ed6c02' : '#c62828',
+                        })),
                       innerRadius: 50,
+                      valueFormatter: (v) => fmtRs(v.value),
                     }]}
                   />
                 ) : (
                   <Typography color="text.secondary">No vouchers yet.</Typography>
                 )}
                 <Box sx={{ display: 'flex', gap: 1, mt: 1, flexWrap: 'wrap', justifyContent: 'center' }}>
-                  {Object.entries(data.voucher_status_counts).map(([status, count]) => (
-                    <Chip key={status} label={`${status}: ${count}`} color={STATUS_COLOR[status] ?? 'default'} size="small" />
+                  {Object.entries(data.voucher_status_amounts).map(([status, amount]) => (
+                    <Chip
+                      key={status}
+                      label={`${status}: ${fmtRs(amount)} (${data.voucher_status_counts[status] ?? 0})`}
+                      color={STATUS_COLOR[status] ?? 'default'}
+                      size="small"
+                    />
                   ))}
                 </Box>
               </CardContent>

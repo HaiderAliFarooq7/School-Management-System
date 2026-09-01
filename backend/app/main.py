@@ -13,6 +13,7 @@ from app.routers import (
     backup,
     collections,
     dashboard,
+    expenses,
     extra_charges,
     fee_audit,
     fee_reports,
@@ -115,6 +116,7 @@ app.include_router(dashboard.router)
 app.include_router(fee_reports.router)
 app.include_router(fee_audit.router)
 app.include_router(collections.router)
+app.include_router(expenses.router)
 app.include_router(attendance.router)
 app.include_router(backup.router)
 app.include_router(master.router)

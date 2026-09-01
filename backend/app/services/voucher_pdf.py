@@ -1,6 +1,7 @@
 import io
 import os
 import re
+from collections import defaultdict
 
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
@@ -33,6 +34,15 @@ def _get_school(db: Session) -> School:
 def _get_class_fee(db: Session, class_name: str) -> float:
     grade = db.execute(select(Grade).where(Grade.class_name == class_name)).scalar_one_or_none()
     return float(grade.fee_amount) if grade else 0.0
+
+
+def _class_fees(db: Session) -> dict[str, float]:
+    """Every class's fee in one query, for batch printing — the per-student
+    lookup above turns into a round trip per challan otherwise."""
+    return {
+        name: float(fee)
+        for name, fee in db.execute(select(Grade.class_name, Grade.fee_amount)).all()
+    }
 
 
 def _build_dues_data(student: Student, vouchers: list[FeeVoucher], charges: list[ExtraCharge], qr_voucher: FeeVoucher | None, class_fee: float) -> dict:
@@ -87,31 +97,19 @@ def gather_voucher_data(db: Session, student: Student, voucher: FeeVoucher) -> d
     return _build_dues_data(student, pending_vouchers, charges, qr_voucher=voucher, class_fee=class_fee)
 
 
-def gather_student_dues(db: Session, student: Student) -> dict:
-    """Every pending month plus every open extra charge for a student,
-    regardless of which month they were generated in — the 'complete
-    previous pending dues' challan, not anchored to any single voucher."""
-    vouchers = db.execute(
-        select(FeeVoucher).where(FeeVoucher.student_id == student.student_id, FeeVoucher.status != "Paid")
-    ).scalars().all()
-    vouchers.sort(key=lambda v: v.fee_month_sort)
-    charges = db.execute(
-        select(ExtraCharge).where(ExtraCharge.student_id == student.student_id, ExtraCharge.status != "Paid")
-    ).scalars().all()
-    qr_voucher = vouchers[-1] if vouchers else None
-    class_fee = _get_class_fee(db, student.class_name)
-    return _build_dues_data(student, vouchers, charges, qr_voucher=qr_voucher, class_fee=class_fee)
-
-
-def _draw_receipt(c, db: Session, x0, y0, w, h, student: Student, data: dict, compact: bool = False, note: str | None = None):
+def _draw_receipt(c, db: Session, x0, y0, w, h, student: Student, data: dict, compact: bool = False, note: str | None = None, school: School | None = None):
     """Mirrors the printed challan layout: school header with a prominent
     logo on the right, student info block, a Month/Charge—Total—Paid—Pending
     grid (every pending month plus open extra charges, ending in a Grand
     Total row), bank details, an optional note, and a sign/stamp line — with
     a dashed-line tear-off stub at the very bottom (the school's copy: name,
     class, father's name, total pending, and a blank box to write the
-    amount collected) that the school cuts off and keeps."""
-    school = _get_school(db)
+    amount collected) that the school cuts off and keeps.
+
+    Callers drawing more than one receipt pass `school` so the school row is
+    fetched once for the whole run rather than once per challan."""
+    if school is None:
+        school = _get_school(db)
     pad = 4 * mm if compact else 5 * mm
     font_title = 15 if compact else 21
     font_body = 9 if compact else 12
@@ -341,9 +339,10 @@ def generate_individual_pages_pdf(db: Session, student_voucher_pairs: list[tuple
     c = canvas.Canvas(dest_path, pagesize=A4)
     width, height = A4
     margin = 6 * mm
+    school = _get_school(db)
     for student, voucher in student_voucher_pairs:
         data = gather_voucher_data(db, student, voucher)
-        _draw_receipt(c, db, margin, margin, width - 2 * margin, height - 2 * margin, student, data, note=note)
+        _draw_receipt(c, db, margin, margin, width - 2 * margin, height - 2 * margin, student, data, note=note, school=school)
         c.showPage()
     c.save()
     return dest_path
@@ -367,13 +366,14 @@ def generate_4_per_sheet_pdf(db: Session, student_voucher_pairs: list[tuple[Stud
         (margin + cell_w + gap, margin),
     ]
 
+    school = _get_school(db)
     for i, (student, voucher) in enumerate(student_voucher_pairs):
         pos_idx = i % 4
         if pos_idx == 0 and i > 0:
             c.showPage()
         x0, y0 = positions[pos_idx]
         data = gather_voucher_data(db, student, voucher)
-        _draw_receipt(c, db, x0, y0, cell_w, cell_h, student, data, compact=True, note=note)
+        _draw_receipt(c, db, x0, y0, cell_w, cell_h, student, data, compact=True, note=note, school=school)
 
     c.showPage()
     c.save()
@@ -381,9 +381,40 @@ def generate_4_per_sheet_pdf(db: Session, student_voucher_pairs: list[tuple[Stud
 
 
 def _students_with_dues(db: Session, students: list[Student]) -> list[tuple[Student, dict]]:
+    """Every student's complete pending dues — every unpaid/partial month
+    plus every open extra charge, regardless of which month it was generated
+    in — for students who actually owe something.
+
+    Loads in a fixed three queries rather than three *per student*: printing
+    a whole school's challans previously fanned out into ~1000 Neon round
+    trips, which dominated the request."""
+    if not students:
+        return []
+
+    ids = [s.student_id for s in students]
+    vouchers_by_student: dict[int, list[FeeVoucher]] = defaultdict(list)
+    for v in db.execute(
+        select(FeeVoucher).where(FeeVoucher.student_id.in_(ids), FeeVoucher.status != "Paid")
+    ).scalars():
+        vouchers_by_student[v.student_id].append(v)
+
+    charges_by_student: dict[int, list[ExtraCharge]] = defaultdict(list)
+    for ch in db.execute(
+        select(ExtraCharge).where(ExtraCharge.student_id.in_(ids), ExtraCharge.status != "Paid")
+    ).scalars():
+        charges_by_student[ch.student_id].append(ch)
+
+    class_fees = _class_fees(db)
+
     pairs = []
     for student in students:
-        data = gather_student_dues(db, student)
+        vouchers = sorted(vouchers_by_student.get(student.student_id, []), key=lambda v: v.fee_month_sort)
+        charges = charges_by_student.get(student.student_id, [])
+        data = _build_dues_data(
+            student, vouchers, charges,
+            qr_voucher=vouchers[-1] if vouchers else None,
+            class_fee=class_fees.get(student.class_name, 0.0),
+        )
         if data["rows"]:
             pairs.append((student, data))
     return pairs
@@ -399,8 +430,9 @@ def generate_all_dues_individual_pdf(db: Session, students: list[Student], dest_
     c = canvas.Canvas(dest_path, pagesize=A4)
     width, height = A4
     margin = 6 * mm
+    school = _get_school(db)
     for student, data in pairs:
-        _draw_receipt(c, db, margin, margin, width - 2 * margin, height - 2 * margin, student, data, note=note)
+        _draw_receipt(c, db, margin, margin, width - 2 * margin, height - 2 * margin, student, data, note=note, school=school)
         c.showPage()
     c.save()
     return dest_path
@@ -426,12 +458,13 @@ def generate_all_dues_4_per_sheet_pdf(db: Session, students: list[Student], dest
         (margin + cell_w + gap, margin),
     ]
 
+    school = _get_school(db)
     for i, (student, data) in enumerate(pairs):
         pos_idx = i % 4
         if pos_idx == 0 and i > 0:
             c.showPage()
         x0, y0 = positions[pos_idx]
-        _draw_receipt(c, db, x0, y0, cell_w, cell_h, student, data, compact=True, note=note)
+        _draw_receipt(c, db, x0, y0, cell_w, cell_h, student, data, compact=True, note=note, school=school)
 
     c.showPage()
     c.save()
