@@ -4,7 +4,8 @@ import {
   Box, Button, Checkbox, Chip, MenuItem, Select, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography,
 } from '@mui/material'
 import {
-  addCharge, applyChargeDiscount, bulkAddCharge, bulkDeleteCharges, deleteCharge, getStudentCharges, payCharge,
+  addCharge, applyChargeDiscount, bulkAddCharge, bulkDeleteCharges, bulkDeleteChargesByFilter,
+  deleteCharge, getChargeGroups, getStudentCharges, payCharge,
 } from '../api/extraCharges'
 import { listGrades } from '../api/grades'
 import { DiscountDialog } from '../components/DiscountDialog'
@@ -228,6 +229,8 @@ export function ExtraChargesPage() {
       />
 
       <BulkChargeSection />
+
+      {isAdmin && <BulkDeleteSection />}
     </Box>
   )
 }
@@ -286,6 +289,111 @@ function BulkChargeSection() {
         </Button>
       </Box>
       {result && <Typography sx={{ mt: 2 }}>{result}</Typography>}
+    </Box>
+  )
+}
+
+function BulkDeleteSection() {
+  const queryClient = useQueryClient()
+  const toast = useToast()
+  const confirmAction = useConfirm()
+  const { data: grades } = useQuery({ queryKey: ['grades'], queryFn: listGrades })
+  const [selectedClasses, setSelectedClasses] = useState<string[]>([])
+  const [description, setDescription] = useState('') // '' = every charge matching the classes
+
+  // Distinct charge descriptions (with counts) for the chosen classes — the
+  // same labels an admin bulk-issued, so a mistaken bulk-add can be undone.
+  const { data: groups } = useQuery({
+    queryKey: ['chargeGroups', selectedClasses],
+    queryFn: () => getChargeGroups(selectedClasses),
+  })
+
+  // Keep the picked description valid when the class filter changes.
+  const descriptionStillValid = description === '' || (groups?.some((g) => g.description === description) ?? false)
+  const effectiveDescription = descriptionStillValid ? description : ''
+
+  const matchingCount = effectiveDescription
+    ? (groups?.find((g) => g.description === effectiveDescription)?.count ?? 0)
+    : (groups?.reduce((sum, g) => sum + g.count, 0) ?? 0)
+
+  const mutation = useMutation({
+    mutationFn: () => bulkDeleteChargesByFilter(selectedClasses, effectiveDescription || null),
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ['charges'] })
+      queryClient.invalidateQueries({ queryKey: ['chargeGroups'] })
+      setDescription('')
+      toast(`Deleted ${res.deleted} charge(s).`, 'success')
+    },
+    onError: (e) =>
+      toast(String((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Bulk delete failed.'), 'error'),
+  })
+
+  // Backend rejects an empty filter, so require at least one class or a specific description.
+  const canDelete = selectedClasses.length > 0 || effectiveDescription !== ''
+
+  const handleDelete = async () => {
+    const scope = effectiveDescription ? `"${effectiveDescription}" charges` : 'ALL charges'
+    const where = selectedClasses.length ? ` in ${selectedClasses.join(', ')}` : ' (every class)'
+    const ok = await confirmAction({
+      title: `Delete ${matchingCount} charge(s)?`,
+      message: `This permanently removes ${scope}${where}, including any with payments or discounts recorded. This cannot be undone.`,
+      confirmLabel: 'Delete',
+      destructive: true,
+    })
+    if (ok) mutation.mutate()
+  }
+
+  return (
+    <Box sx={{ mt: 4, p: 2, border: '1px solid', borderColor: 'error.light', borderRadius: 1, maxWidth: 700 }}>
+      <Typography variant="h6" gutterBottom>
+        Bulk Delete Charges
+      </Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+        Undo a bulk-add. Pick class(es) to delete every charge for those classes, and/or pick a
+        charge type to delete only that one — e.g. remove an "Exam Fee" issued to the wrong class.
+      </Typography>
+      <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
+        <Select
+          multiple
+          size="small"
+          value={selectedClasses}
+          onChange={(e) => setSelectedClasses(e.target.value as unknown as string[])}
+          displayEmpty
+          sx={{ minWidth: 220, width: { xs: '100%', sm: 'auto' } }}
+          renderValue={(sel) => (sel as string[]).join(', ') || 'All classes'}
+        >
+          {grades?.map((g) => (
+            <MenuItem key={g.grade_id} value={g.class_name}>{g.class_name}</MenuItem>
+          ))}
+        </Select>
+        <Select
+          size="small"
+          value={effectiveDescription}
+          onChange={(e) => setDescription(e.target.value as string)}
+          displayEmpty
+          sx={{ minWidth: 240, width: { xs: '100%', sm: 'auto' } }}
+        >
+          <MenuItem value="">All charge types</MenuItem>
+          {groups?.map((g) => (
+            <MenuItem key={g.description} value={g.description}>
+              {g.description} ({g.count})
+            </MenuItem>
+          ))}
+        </Select>
+        <Button
+          variant="contained"
+          color="error"
+          disabled={!canDelete || matchingCount === 0 || mutation.isPending}
+          onClick={handleDelete}
+        >
+          Delete Matching ({matchingCount})
+        </Button>
+      </Box>
+      {!canDelete && (
+        <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+          Select at least one class or a charge type to delete.
+        </Typography>
+      )}
     </Box>
   )
 }
