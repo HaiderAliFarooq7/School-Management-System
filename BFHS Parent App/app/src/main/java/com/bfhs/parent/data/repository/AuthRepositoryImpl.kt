@@ -9,10 +9,12 @@ import com.bfhs.parent.data.network.dto.LoginRequestDto
 import com.bfhs.parent.domain.models.Parent
 import com.bfhs.parent.domain.repository.AuthRepository
 import com.google.firebase.messaging.FirebaseMessaging
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.coroutines.resume
@@ -31,6 +33,13 @@ class AuthRepositoryImpl @Inject constructor(
                 name = response.parentName ?: "",
                 mobileNumber = response.mobileNumber ?: mobileNumber
             )
+            // Drop whatever the last parent left cached before this session
+            // starts. logout() clears the database, but a session can also end
+            // without it — an expired token cleared by UnauthorizedInterceptor,
+            // or simply a different parent signing in on a shared family phone.
+            // Clearing here covers every one of those paths, so one parent can
+            // never be shown another's children, attendance or fees.
+            withContext(Dispatchers.IO) { database.clearAllTables() }
             sessionManager.saveSession(response.accessToken, parent.name, parent.mobileNumber)
             Resource.Success(parent)
         } catch (e: retrofit2.HttpException) {
@@ -49,7 +58,10 @@ class AuthRepositoryImpl @Inject constructor(
 
     override suspend fun logout() {
         sessionManager.clearSession()
-        database.clearAllTables()
+        // Room refuses to run clearAllTables() on the main thread, and the
+        // ViewModels call this straight from viewModelScope (Dispatchers.Main)
+        // — so without this the Logout button crashed the app outright.
+        withContext(Dispatchers.IO) { database.clearAllTables() }
     }
 
     override fun isLoggedIn(): Flow<Boolean> = sessionManager.token.map { !it.isNullOrBlank() }

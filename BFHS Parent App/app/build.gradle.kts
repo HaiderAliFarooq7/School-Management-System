@@ -31,8 +31,30 @@ android {
         buildConfigField("String", "BASE_URL", "\"https://school-management-backend-1t21.onrender.com/\"")
     }
 
+    // Release signing is driven entirely by environment variables so no keystore
+    // or password is ever committed. CI decodes the keystore from a repository
+    // secret; locally these are simply unset. When they are unset the release
+    // build stays unsigned (and cannot be installed) — build `assembleDebug`
+    // for a sideloadable APK instead.
+    val keystoreFile = System.getenv("BFHS_KEYSTORE_FILE")
+    val hasReleaseKeystore = !keystoreFile.isNullOrBlank() && file(keystoreFile).exists()
+
+    signingConfigs {
+        if (hasReleaseKeystore) {
+            create("release") {
+                storeFile = file(keystoreFile!!)
+                storePassword = System.getenv("BFHS_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("BFHS_KEY_ALIAS")
+                keyPassword = System.getenv("BFHS_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
+            if (hasReleaseKeystore) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
