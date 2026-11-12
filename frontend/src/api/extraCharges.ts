@@ -52,6 +52,29 @@ export async function bulkDeleteCharges(charge_ids: number[]): Promise<BulkDelet
   return data
 }
 
+export interface ChargeGroup {
+  description: string
+  count: number
+  total: number
+}
+
+export async function getChargeGroups(class_names: string[]): Promise<ChargeGroup[]> {
+  const params = class_names.length ? { class_names: class_names.join(',') } : undefined
+  const { data } = await apiClient.get<ChargeGroup[]>('/extra-charges/groups', { params })
+  return data
+}
+
+export async function bulkDeleteChargesByFilter(
+  class_names: string[],
+  description: string | null,
+): Promise<BulkDeleteChargesResult> {
+  const { data } = await apiClient.post<BulkDeleteChargesResult>('/extra-charges/bulk-delete-by-filter', {
+    class_names,
+    description,
+  })
+  return data
+}
+
 export interface ChargeEditPayload {
   description: string
   amount: number

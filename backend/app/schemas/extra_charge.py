@@ -43,6 +43,22 @@ class BulkDeleteChargesRequest(BaseModel):
     charge_ids: list[int]
 
 
+class BulkDeleteByFilterRequest(BaseModel):
+    """Delete every charge matching a class and/or a description — the reverse
+    of a bulk-add. At least one of the two must be supplied (enforced in the
+    router) so an empty request can never wipe every charge by accident."""
+    class_names: list[str] = []
+    description: str | None = None
+
+
+class ChargeGroup(BaseModel):
+    """One distinct charge description with how many exist and their total —
+    powers the bulk-delete 'which charge' dropdown and its preview count."""
+    description: str
+    count: int
+    total: float
+
+
 class ChargeEditRequest(BaseModel):
     """Admin-only direct edit — can override a charge's figures even after
     payments/discounts have been recorded against it."""
